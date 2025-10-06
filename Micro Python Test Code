@@ -1,0 +1,139 @@
+from machine import Pin, PWM
+import time
+
+pwm_pin_A = 25
+dir_pin_A = 23
+pwm_pin_B = 18
+dir_pin_B = 19
+pwm_pin_C = 17
+dir_pin_C = 16
+pwm_pin_D = 13
+dir_pin_D = 14
+pwm_pin_E = 4
+dir_pin_E = 5
+
+buzzer_pin = 15
+button_servo_pin = 0
+button_motor_pin = 34
+led_pin = 2
+
+servo1_pin = 33
+servo2_pin = 32
+servo3_pin = 27
+servo4_pin = 26
+
+pwm_A = PWM(Pin(pwm_pin_A), freq=50)
+dir_A = Pin(dir_pin_A, Pin.OUT)
+pwm_B = PWM(Pin(pwm_pin_B), freq=50)
+dir_B = Pin(dir_pin_B, Pin.OUT)
+pwm_C = PWM(Pin(pwm_pin_C), freq=50)
+dir_C = Pin(dir_pin_C, Pin.OUT)
+pwm_D = PWM(Pin(pwm_pin_D), freq=50)
+dir_D = Pin(dir_pin_D, Pin.OUT)
+pwm_E = PWM(Pin(pwm_pin_E), freq=50)
+dir_E = Pin(dir_pin_E, Pin.OUT)
+
+buzzer = Pin(buzzer_pin, Pin.OUT)
+led = Pin(led_pin, Pin.OUT)
+
+servo1 = PWM(Pin(servo1_pin), freq=50)
+servo2 = PWM(Pin(servo2_pin), freq=50)
+servo3 = PWM(Pin(servo3_pin), freq=50)
+servo4 = PWM(Pin(servo4_pin), freq=50)
+
+button_servo = Pin(button_servo_pin, Pin.IN, Pin.PULL_UP)
+button_motor = Pin(button_motor_pin, Pin.IN, Pin.PULL_DOWN)
+
+def motor_run(motor_pwm, motor_dir, speed, direction):
+    motor_dir.value(direction)
+    motor_pwm.duty(speed)
+
+def stop_all_motors():
+    for pwm, dir_pin in [(pwm_A, dir_A),(pwm_B, dir_B),(pwm_C, dir_C),(pwm_D, dir_D),(pwm_E, dir_E)]:
+        motor_run(pwm, dir_pin, 0, 0)
+
+def beep(times=1):
+    for _ in range(times):
+        buzzer.value(1)
+        time.sleep(0.2)
+        buzzer.value(0)
+        time.sleep(0.2)
+
+def motor_cycle_nonblocking(pwm, dir_pin, name, duration_ms=2000):
+    for direction in [1, 0]:
+        print(f"{name} {'Forward' if direction==1 else 'Reverse'}")
+        motor_run(pwm, dir_pin, 1023, direction)
+        start = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), start) < duration_ms:
+            if button_servo.value() == 0:
+                print("Servo button pressed - stopping motors")
+                stop_all_motors()
+                return False
+            time.sleep(0.01)
+        print(f"{name} Stop")
+        motor_run(pwm, dir_pin, 0, direction)
+        start = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), start) < 500:
+            if button_servo.value() == 0:
+                stop_all_motors()
+                return False
+            time.sleep(0.01)
+    return True
+
+def set_servo_angle(servo, angle):
+    duty = int((angle / 180) * 102 + 26)
+    servo.duty(duty)
+
+def sweep_servo_full_cycle(servo, beep_count=1, step=5, delay=0.05):
+    beep(beep_count)
+    for angle in range(0, 181, step):
+        set_servo_angle(servo, angle)
+        time.sleep(delay)
+        if button_motor.value() == 1:
+            print("Motor button pressed - stop servo sweep")
+            return
+    for angle in range(180, -1, -step):
+        set_servo_angle(servo, angle)
+        time.sleep(delay)
+        if button_motor.value() == 1:
+            print("Motor button pressed - stop servo sweep")
+            return
+
+stop_all_motors()
+buzzer.value(0)
+led.value(0)
+motor_mode_active = False
+servo_mode_active = False
+time.sleep(1)
+print("System ready, waiting for button press...\n")
+
+while True:
+    if button_servo.value() == 0 and not servo_mode_active:
+        servo_mode_active = True
+        motor_mode_active = False
+        print("Servo Mode Activated - stopping motors")
+        stop_all_motors()
+        led.value(1)
+        sweep_servo_full_cycle(servo1, beep_count=1)
+        sweep_servo_full_cycle(servo2, beep_count=2)
+        sweep_servo_full_cycle(servo3, beep_count=3)
+        sweep_servo_full_cycle(servo4, beep_count=4)
+        servo_mode_active = False
+
+    elif button_motor.value() == 1 and not motor_mode_active:
+        motor_mode_active = True
+        servo_mode_active = False
+        print("Motor Mode Activated")
+        led.value(0)
+        for motor, pwm, dir_pin, beep_count in [
+            ("Motor A", pwm_A, dir_A, 1),
+            ("Motor B", pwm_B, dir_B, 2),
+            ("Motor C", pwm_C, dir_C, 3),
+            ("Motor D", pwm_D, dir_D, 4),
+            ("Motor E", pwm_E, dir_E, 5)
+        ]:
+            beep(beep_count)
+            cont = motor_cycle_nonblocking(pwm, dir_pin, motor)
+            if not cont:
+                break
+        motor_mode_active = False
