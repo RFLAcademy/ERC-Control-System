@@ -1,6 +1,14 @@
-from machine import Pin, PWM
+from machine import Pin, PWM, I2C
+import ssd1306
 import time
 
+# OLED setup
+i2c = I2C(0, scl=Pin(22), sda=Pin(21))
+oled_width = 128
+oled_height = 64
+oled = ssd1306.SSD1306_I2C(oled_width, oled_height, i2c)
+
+# Motor and pin definitions
 pwm_pin_A = 25
 dir_pin_A = 23
 pwm_pin_B = 18
@@ -22,6 +30,7 @@ servo2_pin = 32
 servo3_pin = 27
 servo4_pin = 26
 
+# Initialize motors
 pwm_A = PWM(Pin(pwm_pin_A), freq=50)
 dir_A = Pin(dir_pin_A, Pin.OUT)
 pwm_B = PWM(Pin(pwm_pin_B), freq=50)
@@ -36,14 +45,17 @@ dir_E = Pin(dir_pin_E, Pin.OUT)
 buzzer = Pin(buzzer_pin, Pin.OUT)
 led = Pin(led_pin, Pin.OUT)
 
+# Servos
 servo1 = PWM(Pin(servo1_pin), freq=50)
 servo2 = PWM(Pin(servo2_pin), freq=50)
 servo3 = PWM(Pin(servo3_pin), freq=50)
 servo4 = PWM(Pin(servo4_pin), freq=50)
 
+# Buttons
 button_servo = Pin(button_servo_pin, Pin.IN, Pin.PULL_UP)
 button_motor = Pin(button_motor_pin, Pin.IN, Pin.PULL_DOWN)
 
+# ---------------- Functions ----------------
 def motor_run(motor_pwm, motor_dir, speed, direction):
     motor_dir.value(direction)
     motor_pwm.duty(speed)
@@ -60,71 +72,130 @@ def beep(times=1):
         time.sleep(0.2)
 
 def motor_cycle_nonblocking(pwm, dir_pin, name, duration_ms=2000):
+    """Runs a single motor forward and reverse with OLED updates."""
     for direction in [1, 0]:
+        oled.fill(0)
+        oled.text("Motor Mode", 20, 0)
+        oled.text(f"{name}", 0, 20)
+        oled.text("Dir: " + ("Fwd" if direction==1 else "Rev"), 0, 35)
+        oled.show()
         print(f"{name} {'Forward' if direction==1 else 'Reverse'}")
+
         motor_run(pwm, dir_pin, 1023, direction)
         start = time.ticks_ms()
+
         while time.ticks_diff(time.ticks_ms(), start) < duration_ms:
             if button_servo.value() == 0:
                 print("Servo button pressed - stopping motors")
                 stop_all_motors()
                 return False
             time.sleep(0.01)
+
+        # Stop motor
+        oled.fill(0)
+        oled.text("Motor Mode", 20, 0)
+        oled.text(f"{name} Stop", 0, 25)
+        oled.show()
         print(f"{name} Stop")
         motor_run(pwm, dir_pin, 0, direction)
-        start = time.ticks_ms()
-        while time.ticks_diff(time.ticks_ms(), start) < 500:
-            if button_servo.value() == 0:
-                stop_all_motors()
-                return False
-            time.sleep(0.01)
+        time.sleep(0.5)
     return True
 
 def set_servo_angle(servo, angle):
     duty = int((angle / 180) * 102 + 26)
     servo.duty(duty)
 
-def sweep_servo_full_cycle(servo, beep_count=1, step=5, delay=0.05):
+def sweep_servo_full_cycle(servo, name, beep_count=1, step=5, delay=0.05):
+    """Sweeps the servo from 0° to 180° and back, showing mode, servo name, and angle."""
     beep(beep_count)
     for angle in range(0, 181, step):
         set_servo_angle(servo, angle)
+        oled.fill(0)
+        oled.text("Servo Mode", 20, 0)
+        oled.text(f"{name}", 0, 20)
+        oled.text(f"Angle: {angle}", 0, 40)
+        oled.show()
+        print(f"{name} -> {angle}°")
         time.sleep(delay)
         if button_motor.value() == 1:
-            print("Motor button pressed - stop servo sweep")
-            return
-    for angle in range(180, -1, -step):
-        set_servo_angle(servo, angle)
-        time.sleep(delay)
-        if button_motor.value() == 1:
+            oled.fill(0)
+            oled.text("Motor button",0,0)
+            oled.text("pressed...",0,10)
+            oled.text("stop servo sweep",0,20)
+            oled.show()
             print("Motor button pressed - stop servo sweep")
             return
 
+    for angle in range(180, -1, -step):
+        set_servo_angle(servo, angle)
+        oled.fill(0)
+        oled.text("Servo Mode", 20, 0)
+        oled.text(f"{name}", 0, 20)
+        oled.text(f"Angle: {angle}", 0, 40)
+        oled.show()
+        print(f"{name} -> {angle}°")
+        time.sleep(delay)
+        if button_motor.value() == 1:
+            oled.fill(0)
+            oled.text("Motor button",0,0)
+            oled.text("pressed...",0,10)
+            oled.text("stop servo sweep",0,20)
+            oled.show()
+            print("Motor button pressed - stop servo sweep")
+            return
+
+# ---------------- Main ----------------
 stop_all_motors()
 buzzer.value(0)
 led.value(0)
 motor_mode_active = False
 servo_mode_active = False
 time.sleep(1)
+
+oled.fill(0)
+oled.text("RFL Academy",20,10)
+oled.text("ERC", 50,30)
+oled.show()
+
+time.sleep(2)
+
+oled.fill(0)
+oled.text("System ready...",0,10)
+oled.text("waiting for",0,20)
+oled.text("button press!",0,30)
+oled.show()
 print("System ready, waiting for button press...\n")
 
 while True:
     if button_servo.value() == 0 and not servo_mode_active:
         servo_mode_active = True
         motor_mode_active = False
+        oled.fill(0)
+        oled.text("Servo Mode",20,0)
+        oled.text("Activated",20,10)
+        oled.text("Stopping motors",0,20)
+        oled.show()
         print("Servo Mode Activated - stopping motors")
         stop_all_motors()
         led.value(1)
-        sweep_servo_full_cycle(servo1, beep_count=1)
-        sweep_servo_full_cycle(servo2, beep_count=2)
-        sweep_servo_full_cycle(servo3, beep_count=3)
-        sweep_servo_full_cycle(servo4, beep_count=4)
+
+        # Servo sequence with names and display angles
+        sweep_servo_full_cycle(servo1, "Servo 1", beep_count=1)
+        sweep_servo_full_cycle(servo2, "Servo 2", beep_count=2)
+        sweep_servo_full_cycle(servo3, "Servo 3", beep_count=3)
+        sweep_servo_full_cycle(servo4, "Servo 4", beep_count=4)
         servo_mode_active = False
 
     elif button_motor.value() == 1 and not motor_mode_active:
         motor_mode_active = True
         servo_mode_active = False
+        oled.fill(0)
+        oled.text("Motor Mode",20,0)
+        oled.text("Activated",20,10)
+        oled.show()
         print("Motor Mode Activated")
         led.value(0)
+
         for motor, pwm, dir_pin, beep_count in [
             ("Motor A", pwm_A, dir_A, 1),
             ("Motor B", pwm_B, dir_B, 2),
@@ -137,3 +208,4 @@ while True:
             if not cont:
                 break
         motor_mode_active = False
+
