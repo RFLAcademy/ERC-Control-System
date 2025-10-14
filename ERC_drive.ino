@@ -27,7 +27,6 @@ button = Pin(0, Pin.IN, Pin.PULL_UP)
 speed = 1023
 
 def motor_run(name, speed, direction):
-    # No reverse logic anymore; direction is directly specified in move
     motor_dir[name].value(direction)
     motor_pwm[name].duty(speed)
 
