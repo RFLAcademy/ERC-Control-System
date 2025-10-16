@@ -1,36 +1,75 @@
 import time
-from motors import run_motor, stop_motor, stop_all
+from machine import Pin
+from motor_library import movement, servo1, servo2, stop_all, check_stop, is_running
+
+# ---------------- Buttons ----------------
+button_start = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Start/resume
+button_stop = Pin(0, Pin.IN, Pin.PULL_UP)      # Emergency stop
+
 stop_all()
-print("Stop All")
-# Run motors
-run_motor("front_right", 800, 0)  # forward
-print("front right")
-time.sleep(2)
+print("All motors stopped.")
 
-stop_motor("front_right")
-print("Stop front right")
-time.sleep(2)
+while True:
+    # Wait until start button is pressed
+    print("Waiting for START button (D34)...")
+    while button_start.value() == 0:
+        check_stop()  # Emergency stop has highest priority
+        time.sleep(0.1)
 
-run_motor("front_left", 800, 1)  # forward
-print("front left")
-time.sleep(2)
+    print("START pressed. Running sequence...")
+    
+    # Move servos
+    servo1.write_angle(90)
+    check_stop()
+    time.sleep(1)
+    servo1.write_angle(0)
+    check_stop()
+    time.sleep(1)
 
-stop_motor("front_left")
-print("stop front left")
-time.sleep(2)
+    servo2.write_angle(45)
+    check_stop()
+    time.sleep(1)
+    servo2.write_angle(135)
+    check_stop()
+    time.sleep(1)
 
-run_motor("back_right", 800, 0)  # reverse
-print("back right")
-time.sleep(2)
+    # Run mecanum movements
+    movement("FORWARD", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("BACKWARD", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("TURN_RIGHT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("TURN_LEFT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("GLIDE_RIGHT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("GLIDE_LEFT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("FORWARD_RIGHT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("BACKWARD_LEFT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("FORWARD_LEFT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    movement("BACKWARD_RIGHT", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
 
-stop_motor("back_right")
-print("stop back right")
-time.sleep(2)
+    stop_all()
+    print("Sequence completed. All motors stopped.")
+    
+    # After finishing, wait for START again
+    while button_start.value() == 0:
+        check_stop()
+        time.sleep(0.1)
 
-run_motor("back_left", 800, 1)  # reverse
-print("back left")
-time.sleep(2)
-
-stop_motor("back_left")
-print("Stop back left")
-time.sleep(2)
