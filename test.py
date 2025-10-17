@@ -2,7 +2,6 @@ import time
 from machine import Pin
 from motor_library import movement, servo1, servo2, stop_all, check_stop, run_motor
 
-# ---------------- Buttons ----------------
 button_start = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Start/resume
 button_stop = Pin(0, Pin.IN, Pin.PULL_UP)      # Emergency stop
 
@@ -14,7 +13,7 @@ while True:
 
     # Wait until start button is pressed
     while button_start.value() == 0:
-        check_stop()  # Always check stop first
+        check_stop() 
         time.sleep(0.1)
 
     print("START pressed. Running sequence...")
@@ -85,7 +84,7 @@ while True:
     print("Sequence completed. All motors stopped.")
 
     # Wait again for next start
-    while button_start.value() == 0:
+    while button_start.value() == 1:
         check_stop()
         time.sleep(0.1)
 
