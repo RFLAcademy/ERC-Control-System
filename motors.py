@@ -1,5 +1,6 @@
 from machine import Pin, PWM
 import time
+from time import sleep
 
 # ---------------- Servo Class ----------------
 class Servo:
@@ -35,10 +36,12 @@ for name, pins in motor_pins.items():
     }
 
 # ---------------- Motor Functions ----------------
-def run_motor(name, speed, direction=1):
+def run_motor(name, speed, duration, direction=1):
     if name in motors:
         motors[name]["dir"].value(direction)
         motors[name]["pwm"].duty(speed)
+        sleep(duration)
+        motors[name]["pwm"].duty(0)
 
 def stop_motor(name):
     if name in motors:
@@ -81,6 +84,7 @@ def movement(motion, speed=1023, duration=1.5):
         stop_all()
         return
 
+    # Direction setup
     if motion == "FORWARD":
         motors["front_left"]["dir"].value(0)
         motors["front_right"]["dir"].value(1)
@@ -112,38 +116,107 @@ def movement(motion, speed=1023, duration=1.5):
         motors["back_left"]["dir"].value(1)
         motors["back_right"]["dir"].value(1)
     elif motion == "FORWARD_RIGHT":
-        motors["front_left"]["dir"].value(0)
-        motors["front_right"]["dir"].value(0)
+        motors["front_right"]["dir"].value(1)
         motors["back_left"]["dir"].value(0)
-        motors["back_right"]["dir"].value(1)
     elif motion == "FORWARD_LEFT":
         motors["front_left"]["dir"].value(0)
-        motors["front_right"]["dir"].value(1)
-        motors["back_left"]["dir"].value(0)
-        motors["back_right"]["dir"].value(0)
+        motors["back_right"]["dir"].value(1)
     elif motion == "BACKWARD_RIGHT":
         motors["front_left"]["dir"].value(1)
+        motors["back_right"]["dir"].value(0)
+    elif motion == "BACKWARD_LEFT":
         motors["front_right"]["dir"].value(0)
         motors["back_left"]["dir"].value(1)
-        motors["back_right"]["dir"].value(1)
-    elif motion == "BACKWARD_LEFT":
+    elif motion == "FL":
         motors["front_left"]["dir"].value(1)
-        motors["front_right"]["dir"].value(1)
-        motors["back_left"]["dir"].value(1)
-        motors["back_right"]["dir"].value(0)
     else:
         print("Unknown motion:", motion)
         return
 
+    # Movement Execution
     interval = 0.05
     elapsed = 0
     while elapsed < duration:
         if not _running:
             stop_all()
             return
-        for m in motors:
-            motors[m]["pwm"].duty(speed)
+
+        # Only 2 motors for diagonal moves
+        if motion == "FORWARD_RIGHT":
+            motors["front_right"]["pwm"].duty(speed)
+            motors["back_left"]["pwm"].duty(speed)
+        elif motion == "FORWARD_LEFT":
+            motors["front_left"]["pwm"].duty(speed)
+            motors["back_right"]["pwm"].duty(speed)
+        elif motion == "BACKWARD_RIGHT":
+            motors["front_left"]["pwm"].duty(speed)
+            motors["back_right"]["pwm"].duty(speed)
+        elif motion == "BACKWARD_LEFT":
+            motors["front_right"]["pwm"].duty(speed)
+            motors["back_left"]["pwm"].duty(speed)
+        elif motion == "FL":
+            motors["front_left"]["pwm"].duty(speed)
+        else:
+            # All 4 motors for other moves
+            for m in motors:
+                if m != "extra_motor":
+                    motors[m]["pwm"].duty(speed)
+
         time.sleep(interval)
         elapsed += interval
+
     stop_all()
+
+# ---------------- MAIN LOOP ----------------
+stop_all()
+print("All motors stopped.")
+
+while True:
+    check_stop()
+    if is_running():
+        servo1.write_angle(90)
+        time.sleep(1)
+        servo1.write_angle(0)
+        time.sleep(1)
+
+        servo2.write_angle(45)
+        time.sleep(1)
+        servo2.write_angle(135)
+        time.sleep(1)
+        
+        movement("FL", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("FORWARD", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("BACKWARD", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("TURN_RIGHT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("TURN_LEFT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("GLIDE_RIGHT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("GLIDE_LEFT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("FORWARD_RIGHT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("BACKWARD_LEFT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("FORWARD_LEFT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+        movement("BACKWARD_RIGHT", 1023, 1.5)
+        check_stop()
+        time.sleep(2)
+
+        stop_all()
 
