@@ -1,7 +1,8 @@
 # motor_library.py
 from machine import Pin, PWM
 import time
-from time import sleep
+
+wait = time.sleep  # alias for sleep
 
 # ---------------- Servo Class ----------------
 class Servo:
@@ -9,10 +10,12 @@ class Servo:
         self.pwm = PWM(Pin(pin))
         self.pwm.freq(50)
 
-    def write_angle(self, angle):
-        angle = max(0, min(180, angle))
-        duty = int(40 + (angle / 180) * 75)
+    def pos(self, position):
+        """Position from 0.0 (min) to 1.0 (max)"""
+        position = max(0.0, min(1.0, position))
+        duty = int(40 + position * 75)  # adjust as per your servo
         self.pwm.duty(duty)
+
 
 # ---------------- Servo Instances ----------------
 servo1 = Servo(33)
@@ -39,10 +42,14 @@ for name, pins in motor_pins.items():
 
 # ---------------- Motor Functions ----------------
 def run_motor(name, speed, duration, direction=1):
+    """
+    Run a single motor with speed 0–100.
+    """
     if name in motors:
         motors[name]["dir"].value(direction)
-        motors[name]["pwm"].duty(speed)
-        sleep(duration)
+        duty = int(max(0, min(100, speed)) * 1023 // 100)  # scale 0–100 to 0–1023
+        motors[name]["pwm"].duty(duty)
+        wait(duration)
         motors[name]["pwm"].duty(0)
 
 def stop_motor(name):
@@ -68,57 +75,62 @@ def check_stop():
         _running = False
         print("EMERGENCY STOP!")
         while button_stop.value() == 0:
-            time.sleep(0.1)
+            wait(0.1)
     if button_motor.value() == 1:
         _running = True
-        time.sleep(0.3)
+        wait(0.3)
 
 def is_running():
     return _running
 
 # ---------------- Robot Movements ----------------
-def movement(motion, speed=1023, duration=1.5):
+def movement(motion, speed=100, duration=1.5):
+    """
+    Mecanum robot movements, speed normalized 0–100
+    """
     if not _running:
         stop_all()
         return
 
+    duty = int(max(0, min(100, speed)) * 1023 // 100)  # scale 0–100 to 0–1023
+
     # Direction setup
-    if motion == "FORWARD":
+    if motion == "FW":
         motors["front_left"]["dir"].value(0)
         motors["front_right"]["dir"].value(1)
         motors["back_left"]["dir"].value(0)
         motors["back_right"]["dir"].value(1)
-    elif motion == "BACKWARD":
+    elif motion == "BW":
         motors["front_left"]["dir"].value(1)
         motors["front_right"]["dir"].value(0)
         motors["back_left"]["dir"].value(1)
         motors["back_right"]["dir"].value(0)
-    elif motion == "TURN_LEFT":
+    elif motion == "CCW":
         for m in ["front_left","front_right","back_left","back_right"]:
             motors[m]["dir"].value(1)
-    elif motion == "TURN_RIGHT":
+    elif motion == "CW":
         for m in ["front_left","front_right","back_left","back_right"]:
             motors[m]["dir"].value(0)
-    elif motion == "GLIDE_RIGHT":
+    elif motion == "R":
         motors["front_left"]["dir"].value(1)
         motors["front_right"]["dir"].value(1)
         motors["back_left"]["dir"].value(0)
         motors["back_right"]["dir"].value(0)
-    elif motion == "GLIDE_LEFT":
+    elif motion == "L":
         motors["front_left"]["dir"].value(0)
         motors["front_right"]["dir"].value(0)
         motors["back_left"]["dir"].value(1)
         motors["back_right"]["dir"].value(1)
-    elif motion == "FORWARD_RIGHT":
+    elif motion == "FR":
         motors["front_right"]["dir"].value(1)
         motors["back_left"]["dir"].value(0)
-    elif motion == "FORWARD_LEFT":
+    elif motion == "FL":
         motors["front_left"]["dir"].value(0)
         motors["back_right"]["dir"].value(1)
-    elif motion == "BACKWARD_RIGHT":
+    elif motion == "BR":
         motors["front_left"]["dir"].value(1)
         motors["back_right"]["dir"].value(0)
-    elif motion == "BACKWARD_LEFT":
+    elif motion == "BL":
         motors["front_right"]["dir"].value(0)
         motors["back_left"]["dir"].value(1)
     elif motion == "FL":  # Single motor
@@ -135,26 +147,26 @@ def movement(motion, speed=1023, duration=1.5):
             stop_all()
             return
 
-        if motion == "FORWARD_RIGHT":
-            motors["front_right"]["pwm"].duty(speed)
-            motors["back_left"]["pwm"].duty(speed)
-        elif motion == "FORWARD_LEFT":
-            motors["front_left"]["pwm"].duty(speed)
-            motors["back_right"]["pwm"].duty(speed)
-        elif motion == "BACKWARD_RIGHT":
-            motors["front_left"]["pwm"].duty(speed)
-            motors["back_right"]["pwm"].duty(speed)
-        elif motion == "BACKWARD_LEFT":
-            motors["front_right"]["pwm"].duty(speed)
-            motors["back_left"]["pwm"].duty(speed)
+        if motion == "FR":
+            motors["front_right"]["pwm"].duty(duty)
+            motors["back_left"]["pwm"].duty(duty)
         elif motion == "FL":
-            motors["front_left"]["pwm"].duty(speed)
+            motors["front_left"]["pwm"].duty(duty)
+            motors["back_right"]["pwm"].duty(duty)
+        elif motion == "BR":
+            motors["front_left"]["pwm"].duty(duty)
+            motors["back_right"]["pwm"].duty(duty)
+        elif motion == "BL":
+            motors["front_right"]["pwm"].duty(duty)
+            motors["back_left"]["pwm"].duty(duty)
+        elif motion == "FL":
+            motors["front_left"]["pwm"].duty(duty)
         else:
             for m in motors:
                 if m != "extra_motor":
-                    motors[m]["pwm"].duty(speed)
+                    motors[m]["pwm"].duty(duty)
 
-        time.sleep(interval)
+        wait(interval)
         elapsed += interval
 
     stop_all()
