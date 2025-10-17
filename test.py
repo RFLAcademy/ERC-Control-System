@@ -1,6 +1,6 @@
 import time
 from machine import Pin
-from motor_library import movement, servo1, servo2, stop_all, check_stop
+from motor_library import movement, servo1, servo2, stop_all, check_stop, run_motor
 
 # ---------------- Buttons ----------------
 button_start = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Start/resume
@@ -18,7 +18,6 @@ while True:
         time.sleep(0.1)
 
     print("START pressed. Running sequence...")
-
     # ---------------- Servo Movements ----------------
     servo1.write_angle(90)
     check_stop()
@@ -37,9 +36,13 @@ while True:
     time.sleep(1)
 
     # ---------------- Mecanum Movements ----------------
+    movement("FL", speed=1023, duration=1.5)
+    check_stop()
+    time.sleep(2)
+    
     movement("FORWARD", speed=1023, duration=1.5)
     check_stop()
-    time.sleep(3)
+    time.sleep(2)
 
     movement("BACKWARD", speed=1023, duration=1.5)
     check_stop()
