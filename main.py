@@ -34,7 +34,7 @@ while True:
     wait(1)
 
     # ---------------- Mecanum Movements ----------------
-    movement("FL", speed=100, duration=1.5)
+    movement("front_left", speed=100, duration=1.5)
     check_stop()
     wait(2)
     
@@ -42,7 +42,7 @@ while True:
     check_stop()
     wait(2)
 
-    movement("BW", speed=10, duration=1.5)
+    movement("BW", speed=100, duration=1.5)
     check_stop()
     wait(2)
 
