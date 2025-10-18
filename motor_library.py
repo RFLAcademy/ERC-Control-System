@@ -159,7 +159,7 @@ def movement(motion, speed=100, duration=1.5):
         elif motion == "BL":
             motors["front_right"]["pwm"].duty(duty)
             motors["back_left"]["pwm"].duty(duty)
-        elif motion == "FL":
+        elif motion == "front_left":
             motors["front_left"]["pwm"].duty(duty)
         else:
             for m in motors:
