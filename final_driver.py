@@ -23,36 +23,43 @@ servo4 = Servo(26)
 
 # ---------------- Motor Configurations ----------------
 motor_configs = {
-    "A": {
+    "ONE": {
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 18, "dir": 19},
         "back_left": {"pwm": 17, "dir": 16},
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "B": {
+    "TWO": {
         "front_left": {"pwm": 23, "dir": 25},
         "front_right": {"pwm": 18, "dir": 19},
         "back_left": {"pwm": 16, "dir": 17},
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "C": {
+    "THREE": {
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 18, "dir": 19},
         "back_left": {"pwm": 17, "dir": 16},
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "D": {
+    "FOUR": {
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 18, "dir": 19},
         "back_left": {"pwm": 17, "dir": 16},
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "E": {
+    "FIVE": {
         "front_left": {"pwm": 23, "dir": 25},
+        "front_right": {"pwm": 18, "dir": 19},
+        "back_left": {"pwm": 16, "dir": 17},
+        "back_right": {"pwm": 13, "dir": 14},
+        "extra_motor": {"pwm": 4, "dir": 5},
+    },
+    "ELEVEN": {
+        "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 18, "dir": 19},
         "back_left": {"pwm": 16, "dir": 17},
         "back_right": {"pwm": 13, "dir": 14},
@@ -216,5 +223,6 @@ def movement(motion, speed=100, duration=1.5):
         elapsed += interval
 
     stop_all()
+
 
 
