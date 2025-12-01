@@ -3,6 +3,30 @@ import time
 
 wait = time.sleep
 
+# ---------------- FAIL-SAFE MOTOR RESET ----------------
+def _reset_all_pwm_and_dir():
+    # Only reset pins actually defined in motor configs
+    used_pwm_pins = set()
+    used_dir_pins = set()
+
+    for cfg in motor_configs.values():
+        for motor in cfg.values():
+            used_pwm_pins.add(motor["pwm"])
+            used_dir_pins.add(motor["dir"])
+
+    for p in used_pwm_pins:
+        try:
+            PWM(Pin(p)).deinit()
+        except:
+            pass
+
+    for p in used_dir_pins:
+        try:
+            Pin(p, Pin.OUT).value(0)
+        except:
+            pass
+
+
 # ---------------- Servo Class ----------------
 class Servo:
     def __init__(self, pin):
@@ -10,16 +34,17 @@ class Servo:
         self.pwm.freq(50)
 
     def pos(self, position):
-        """Position from 0.0 (min) to 1.0 (max)"""
         position = max(0.0, min(1.0, position))
         duty = int(40 + position * 75)
         self.pwm.duty(duty)
+
 
 # ---------------- Servo Instances ----------------
 servo1 = Servo(33)
 servo2 = Servo(32)
 servo3 = Servo(27)
 servo4 = Servo(26)
+
 
 # ---------------- Motor Configurations ----------------
 motor_configs = {
@@ -58,6 +83,13 @@ motor_configs = {
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
+    "SIX": {
+        "front_left": {"pwm": 23, "dir": 25},
+        "front_right": {"pwm": 19, "dir": 18},
+        "back_left": {"pwm": 16, "dir": 17},
+        "back_right": {"pwm": 14, "dir": 13},
+        "extra_motor": {"pwm": 4, "dir": 5},
+    },
     "ELEVEN": {
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 18, "dir": 19},
@@ -67,25 +99,29 @@ motor_configs = {
     },
 }
 
+
 # ---------------- Global motors ----------------
 motors = {}
 
 def set_motor_config(config_id):
-    """Initialize motors based on config A–E"""
     global motors
     if config_id not in motor_configs:
-        raise ValueError("Invalid config ID. Use A, B, C, D, or E")
+        raise ValueError("Invalid config ID")
+
+    _reset_all_pwm_and_dir()
+
     motors = {}
-    pins = motor_configs[config_id]
-    for name, p in pins.items():
+    for name, pin in motor_configs[config_id].items():
         motors[name] = {
-            "pwm": PWM(Pin(p["pwm"]), freq=50),
-            "dir": Pin(p["dir"], Pin.OUT)
+            "pwm": PWM(Pin(pin["pwm"]), freq=1000),
+            "dir": Pin(pin["dir"], Pin.OUT)
         }
+        motors[name]["pwm"].duty(0)
+        motors[name]["dir"].value(0)
+
 
 # ---------------- Motor Functions ----------------
 def run_motor(name, speed, duration, direction=1):
-    """Run a single motor with speed 0–100"""
     if name in motors:
         motors[name]["dir"].value(direction)
         duty = int(max(0, min(100, speed)) * 1023 // 100)
@@ -93,23 +129,27 @@ def run_motor(name, speed, duration, direction=1):
         wait(duration)
         motors[name]["pwm"].duty(0)
 
+
 def stop_motor(name):
     if name in motors:
         motors[name]["pwm"].duty(0)
 
+
 def stop_all():
-    for name in motors:
-        stop_motor(name)
+    for m in motors:
+        try:
+            motors[m]["pwm"].duty(0)
+        except:
+            pass
+
 
 # ---------------- Buttons ----------------
-button_motor = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Start/resume
-button_stop = Pin(0, Pin.IN, Pin.PULL_UP)      # Emergency stop
+button_motor = Pin(34, Pin.IN)
+button_stop = Pin(0, Pin.IN, Pin.PULL_UP)
 
-# ---------------- Control Container ----------------
 _running = False
 
 def check_stop():
-    """Emergency stop and resume"""
     global _running
     if button_stop.value() == 0:
         stop_all()
@@ -117,23 +157,25 @@ def check_stop():
         print("EMERGENCY STOP!")
         while button_stop.value() == 0:
             wait(0.1)
+
     if button_motor.value() == 1:
         _running = True
         wait(0.3)
 
+
 def is_running():
     return _running
 
+
 # ---------------- Robot Movements ----------------
-def movement(motion, speed=100, duration=1.5):
-    """Mecanum robot movements, speed 0–100"""
+def movement(motion, speed=100, duration=1.5, direction=1):
     if not _running:
         stop_all()
         return
 
     duty = int(max(0, min(100, speed)) * 1023 // 100)
 
-    # Direction setup
+    # Direction control now supports single motors
     if motion == "FW":
         motors["front_left"]["dir"].value(0)
         motors["front_right"]["dir"].value(1)
@@ -145,75 +187,27 @@ def movement(motion, speed=100, duration=1.5):
         motors["back_left"]["dir"].value(1)
         motors["back_right"]["dir"].value(0)
     elif motion == "CCW":
-        for m in ["front_left","front_right","back_left","back_right"]:
+        for m in motors:
             motors[m]["dir"].value(1)
     elif motion == "CW":
-        for m in ["front_left","front_right","back_left","back_right"]:
+        for m in motors:
             motors[m]["dir"].value(0)
-    elif motion == "R":
-        motors["front_left"]["dir"].value(1)
-        motors["front_right"]["dir"].value(1)
-        motors["back_left"]["dir"].value(0)
-        motors["back_right"]["dir"].value(0)
-    elif motion == "L":
-        motors["front_left"]["dir"].value(0)
-        motors["front_right"]["dir"].value(0)
-        motors["back_left"]["dir"].value(1)
-        motors["back_right"]["dir"].value(1)
-    # Additional mecanum moves
-    elif motion == "FR":
-        motors["front_right"]["dir"].value(1)
-        motors["back_left"]["dir"].value(0)
-    elif motion == "FL":
-        motors["front_left"]["dir"].value(0)
-        motors["back_right"]["dir"].value(1)
-    elif motion == "BR":
-        motors["front_left"]["dir"].value(1)
-        motors["back_right"]["dir"].value(0)
-    elif motion == "BL":
-        motors["front_right"]["dir"].value(0)
-        motors["back_left"]["dir"].value(1)
-    elif motion == "front_left":
-        motors["front_left"]["dir"].value(1)
-    elif motion == "front_right":
-        motors["front_right"]["dir"].value(1)
-    elif motion == "back_left":
-        motors["back_left"]["dir"].value(1)
-    elif motion == "back_right":
-        motors["back_right"]["dir"].value(1)
+    elif motion in motors:
+        motors[motion]["dir"].value(direction)
     else:
         print("Unknown motion:", motion)
         return
 
-    # Movement execution
     interval = 0.05
     elapsed = 0
+
     while elapsed < duration:
         if not _running:
             stop_all()
             return
-        # Apply PWM duty
-        if motion in ["FR", "FL", "BR", "BL"]:
-            if "FR" in motion:
-                motors["front_right"]["pwm"].duty(duty)
-                motors["back_left"]["pwm"].duty(duty)
-            elif "FL" in motion:
-                motors["front_left"]["pwm"].duty(duty)
-                motors["back_right"]["pwm"].duty(duty)
-            elif "BR" in motion:
-                motors["front_left"]["pwm"].duty(duty)
-                motors["back_right"]["pwm"].duty(duty)
-            elif "BL" in motion:
-                motors["front_right"]["pwm"].duty(duty)
-                motors["back_left"]["pwm"].duty(duty)
-        elif motion == "front_left":
-            motors["front_left"]["pwm"].duty(duty)
-        elif motion == "front_right":
-            motors["front_right"]["pwm"].duty(duty)
-        elif motion == "back_left":
-            motors["back_left"]["pwm"].duty(duty)
-        elif motion == "back_right":
-            motors["front_right"]["pwm"].duty(duty)
+
+        if motion in motors:
+            motors[motion]["pwm"].duty(duty)
         else:
             for m in motors:
                 if m != "extra_motor":
@@ -223,6 +217,4 @@ def movement(motion, speed=100, duration=1.5):
         elapsed += interval
 
     stop_all()
-
-
 
