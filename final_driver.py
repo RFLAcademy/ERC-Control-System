@@ -5,7 +5,6 @@ wait = time.sleep
 
 # ---------------- FAIL-SAFE MOTOR RESET ----------------
 def _reset_all_pwm_and_dir():
-    # Only reset pins actually defined in motor configs
     used_pwm_pins = set()
     used_dir_pins = set()
 
@@ -102,6 +101,8 @@ motor_configs = {
 
 # ---------------- Global motors ----------------
 motors = {}
+_running = False
+
 
 def set_motor_config(config_id):
     global motors
@@ -144,23 +145,29 @@ def stop_all():
 
 
 # ---------------- Buttons ----------------
-button_motor = Pin(34, Pin.IN)
-button_stop = Pin(0, Pin.IN, Pin.PULL_UP)
+button_start = Pin(34, Pin.IN, Pin.PULL_DOWN)
+button_stop  = Pin(0, Pin.IN, Pin.PULL_UP)
 
-_running = False
+
+def wait_for_start():
+    global _running
+    print("Waiting for START button (D34)...")
+    while button_start.value() == 0:
+        wait(0.01)
+    print("START pressed!")
+    _running = True
+
 
 def check_stop():
     global _running
+
+    # Emergency stop pressed
     if button_stop.value() == 0:
         stop_all()
         _running = False
-        print("EMERGENCY STOP!")
+        print("EMERGENCY STOP! Release button to continue.")
         while button_stop.value() == 0:
             wait(0.1)
-
-    if button_motor.value() == 1:
-        _running = True
-        wait(0.3)
 
 
 def is_running():
@@ -169,31 +176,37 @@ def is_running():
 
 # ---------------- Robot Movements ----------------
 def movement(motion, speed=100, duration=1.5, direction=1):
+    global _running
+
     if not _running:
         stop_all()
         return
 
     duty = int(max(0, min(100, speed)) * 1023 // 100)
 
-    # Direction control now supports single motors
     if motion == "FW":
         motors["front_left"]["dir"].value(0)
         motors["front_right"]["dir"].value(1)
         motors["back_left"]["dir"].value(0)
         motors["back_right"]["dir"].value(1)
+
     elif motion == "BW":
         motors["front_left"]["dir"].value(1)
         motors["front_right"]["dir"].value(0)
         motors["back_left"]["dir"].value(1)
         motors["back_right"]["dir"].value(0)
+
     elif motion == "CCW":
         for m in motors:
             motors[m]["dir"].value(1)
+
     elif motion == "CW":
         for m in motors:
             motors[m]["dir"].value(0)
+
     elif motion in motors:
         motors[motion]["dir"].value(direction)
+
     else:
         print("Unknown motion:", motion)
         return
@@ -202,6 +215,7 @@ def movement(motion, speed=100, duration=1.5, direction=1):
     elapsed = 0
 
     while elapsed < duration:
+        check_stop()
         if not _running:
             stop_all()
             return
