@@ -10,11 +10,10 @@ while True:
     wait_for_start()
     
     led_on()
-    buzzer_on()
+    buzz(1, 5)   #buzzer (duration, no. of beeps for the duration
     wait(1)
                             
     led_off()
-    buzzer_off()
     wait(1)
     
     servo1.pos(0)
@@ -31,6 +30,9 @@ while True:
     wait(2)
     
     movement("back_left", speed=100, duration=2, direction=1)
+    wait(2)
+    
+    movement("extra_motor", speed=100, duration=2)
     wait(2)
 
     # Stop all motors at the end
