@@ -1,6 +1,6 @@
 from motor_library import *
 
-set_motor_config("SIX")  # Change as needed for your device
+set_motor_config("NINE")  # Change as needed for your device
 
 stop_all()
 print("All motors stopped and system ready.")
@@ -10,9 +10,11 @@ while True:
     wait_for_start()
     
     led_on()
+    buzzer_on()
     wait(1)
                             
     led_off()
+    buzzer_off()
     wait(1)
     
     servo1.pos(0)
