@@ -8,27 +8,27 @@ print("All motors stopped and system ready.")
 while True:
     # Wait until START button is pressed
     wait_for_start()
-    check_stop()
+    
+    led_on()
+    wait(1)
+                            
+    led_off()
+    wait(1)
     
     servo1.pos(0)
-    check_stop()
     wait(1)
 
     # ---------------- Mecanum Movements ----------------
     movement("front_right", speed=100, duration=2, direction=1)
-    check_stop()
     wait(2)
     
     movement("front_left", speed=100, duration=2, direction=1)
-    check_stop()
     wait(2)
     
     movement("back_right", speed=100, duration=2, direction=1)
-    check_stop()
     wait(2)
     
     movement("back_left", speed=100, duration=2, direction=1)
-    check_stop()
     wait(2)
 
     # Stop all motors at the end
