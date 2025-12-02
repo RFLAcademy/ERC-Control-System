@@ -1,7 +1,18 @@
 from machine import Pin, PWM
 import time
 
-wait = time.sleep
+# Replace default wait with safety-checked wait
+def wait(duration):
+    interval = 0.05
+    elapsed = 0
+    while elapsed < duration:
+        check_stop()
+        if not _running:
+            stop_all()
+            return
+        time.sleep(interval)
+        elapsed += interval
+
 
 # ---------------- FAIL-SAFE MOTOR RESET ----------------
 def _reset_all_pwm_and_dir():
@@ -33,6 +44,7 @@ class Servo:
         self.pwm.freq(50)
 
     def pos(self, position):
+        check_stop()
         position = max(0.0, min(1.0, position))
         duty = int(40 + position * 75)
         self.pwm.duty(duty)
@@ -113,7 +125,7 @@ motor_configs = {
 }
 
 
-# ---------------- Global motors ----------------
+# ---------------- Global Motors ----------------
 motors = {}
 _running = False
 
@@ -137,6 +149,7 @@ def set_motor_config(config_id):
 
 # ---------------- Motor Functions ----------------
 def run_motor(name, speed, duration, direction=1):
+    check_stop()
     if name in motors:
         motors[name]["dir"].value(direction)
         duty = int(max(0, min(100, speed)) * 1023 // 100)
@@ -160,7 +173,8 @@ def stop_all():
 
 # ---------------- Buttons ----------------
 button_start = Pin(34, Pin.IN, Pin.PULL_DOWN)
-button_stop  = Pin(0, Pin.IN, Pin.PULL_UP)
+button_stop = Pin(0, Pin.IN, Pin.PULL_UP)
+led_warning = Pin(2, Pin.OUT)
 
 
 def wait_for_start():
@@ -174,21 +188,40 @@ def wait_for_start():
 
 def check_stop():
     global _running
-
-    # Emergency stop pressed
     if button_stop.value() == 0:
         stop_all()
         _running = False
-        print("EMERGENCY STOP! Release button to continue.")
+        print("EMERGENCY STOP! LED blinking for 5 sec...")
+
+        # Blink LED for 5 seconds
+        blink_time = 5
+        interval = 0.2
+        elapsed = 0
+        while elapsed < blink_time:
+            led_warning.value(1)
+            time.sleep(interval)
+            led_warning.value(0)
+            time.sleep(interval)
+            elapsed += interval * 2
+
+        print("Waiting for STOP release...")
         while button_stop.value() == 0:
-            wait(0.1)
+            time.sleep(0.05)
+
+        led_warning.value(0)  # Ensure LED off after release
+        
+def led_on():
+    led_warning.value(1)
+
+def led_off():
+    led_warning.value(0)
 
 
 def is_running():
     return _running
 
 
-# ---------------- Robot Movements ----------------
+# ---------------- Movements ----------------
 def movement(motion, speed=100, duration=1.5, direction=1):
     global _running
 
@@ -225,9 +258,8 @@ def movement(motion, speed=100, duration=1.5, direction=1):
         print("Unknown motion:", motion)
         return
 
-    interval = 0.05
     elapsed = 0
-
+    interval = 0.05
     while elapsed < duration:
         check_stop()
         if not _running:
@@ -241,7 +273,7 @@ def movement(motion, speed=100, duration=1.5, direction=1):
                 if m != "extra_motor":
                     motors[m]["pwm"].duty(duty)
 
-        wait(interval)
+        time.sleep(interval)
         elapsed += interval
 
     stop_all()
