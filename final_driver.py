@@ -224,11 +224,17 @@ def led_on():
 def led_off():
     led_warning.value(0)
     
-def buzzer_on():
-    buzzer_pin.value(1)
+def buzz(duration, times):
+    if times <= 0 or duration <= 0:
+        return
 
-def buzzer_off():
-    buzzer_pin.value(0)
+    interval = duration / (times * 2)  # ON + OFF cycles
+
+    for _ in range(times):
+        buzzer_pin.value(1)
+        time.sleep(interval)
+        buzzer_pin.value(0)
+        time.sleep(interval)
 
 
 def is_running():
@@ -256,6 +262,42 @@ def movement(motion, speed=100, duration=1.5, direction=1):
         motors["front_right"]["dir"].value(0)
         motors["back_left"]["dir"].value(1)
         motors["back_right"]["dir"].value(0)
+        
+    elif motion == "L":  # Strafe Left
+        motors["front_left"]["dir"].value(1)
+        motors["front_right"]["dir"].value(0)
+        motors["back_left"]["dir"].value(0)
+        motors["back_right"]["dir"].value(1)
+
+    elif motion == "R":  # Strafe Right
+        motors["front_left"]["dir"].value(0)
+        motors["front_right"]["dir"].value(1)
+        motors["back_left"]["dir"].value(1)
+        motors["back_right"]["dir"].value(0)
+
+    elif motion == "FL":  # Forward Left Diagonal
+        motors["front_right"]["dir"].value(1)
+        motors["back_left"]["dir"].value(0)
+        motors["front_left"]["pwm"].duty(0)
+        motors["back_right"]["pwm"].duty(0)
+
+    elif motion == "FR":  # Forward Right Diagonal
+        motors["front_left"]["dir"].value(0)
+        motors["back_right"]["dir"].value(1)
+        motors["front_right"]["pwm"].duty(0)
+        motors["back_left"]["pwm"].duty(0)
+
+    elif motion == "BL":  # Backward Left Diagonal
+        motors["front_right"]["dir"].value(0)
+        motors["back_left"]["dir"].value(1)
+        motors["front_left"]["pwm"].duty(0)
+        motors["back_right"]["pwm"].duty(0)
+
+    elif motion == "BR":  # Backward Right Diagonal
+        motors["front_left"]["dir"].value(1)
+        motors["back_right"]["dir"].value(0)
+        motors["front_right"]["pwm"].duty(0)
+        motors["back_left"]["pwm"].duty(0)
 
     elif motion == "CCW":
         for m in motors:
