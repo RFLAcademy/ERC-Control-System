@@ -115,6 +115,13 @@ motor_configs = {
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
+    "NINE": {
+        "front_left": {"pwm": 23, "dir": 25},
+        "front_right": {"pwm": 18, "dir": 19},
+        "back_left": {"pwm": 16, "dir": 17},
+        "back_right": {"pwm": 13, "dir": 14},
+        "extra_motor": {"pwm": 4, "dir": 5},
+    },
     "ELEVEN": {
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 18, "dir": 19},
@@ -175,6 +182,7 @@ def stop_all():
 button_start = Pin(34, Pin.IN, Pin.PULL_DOWN)
 button_stop = Pin(0, Pin.IN, Pin.PULL_UP)
 led_warning = Pin(2, Pin.OUT)
+buzzer_pin = Pin(15, Pin.OUT)
 
 
 def wait_for_start():
@@ -215,6 +223,12 @@ def led_on():
 
 def led_off():
     led_warning.value(0)
+    
+def buzzer_on():
+    buzzer_pin.value(1)
+
+def buzzer_off():
+    buzzer_pin.value(0)
 
 
 def is_running():
