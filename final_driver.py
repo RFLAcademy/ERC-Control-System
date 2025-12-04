@@ -265,15 +265,15 @@ def movement(motion, speed=100, duration=1.5, direction=1):
         
     elif motion == "L":  # Strafe Left
         motors["front_left"]["dir"].value(1)
-        motors["front_right"]["dir"].value(0)
+        motors["front_right"]["dir"].value(1)
         motors["back_left"]["dir"].value(0)
-        motors["back_right"]["dir"].value(1)
+        motors["back_right"]["dir"].value(0)
 
     elif motion == "R":  # Strafe Right
         motors["front_left"]["dir"].value(0)
-        motors["front_right"]["dir"].value(1)
+        motors["front_right"]["dir"].value(0)
         motors["back_left"]["dir"].value(1)
-        motors["back_right"]["dir"].value(0)
+        motors["back_right"]["dir"].value(1)
 
     elif motion == "FL":  # Forward Left Diagonal
         motors["front_right"]["dir"].value(1)
@@ -333,4 +333,5 @@ def movement(motion, speed=100, duration=1.5, direction=1):
         elapsed += interval
 
     stop_all()
+
 
