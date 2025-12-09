@@ -32,10 +32,11 @@ while True:
     movement("back_left", speed=100, duration=2, direction=1)
     wait(2)
     
-    movement("extra_motor", speed=100, duration=2)
+    movement("extra_motor", speed=100, duration=2, direction =1)
     wait(2)
 
     # Stop all motors at the end
     stop_all()
     print("Sequence completed. All motors stopped.")
+
 
