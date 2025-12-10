@@ -40,7 +40,7 @@ def show_text(text):
     oled.text(text, 10, 25)
     oled.show()
     print(text)
-
+ 
 def move(fl, fr, bl, br, label, duration=1.5):
     show_text(label)
     motor_run("A", fl[0], fl[1])
