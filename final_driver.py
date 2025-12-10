@@ -192,12 +192,12 @@ motor_configs = {
         "back_right": {"pwm": 16, "dir": 17},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "THIRTY": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 16, "dir": 17},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 4, "dir": 5},
+    "TWENTY": {
+        "front_left": {"pwm": 18, "dir": 19},
+        "front_right": {"pwm": 16, "dir": 17},
+        "back_left": {"pwm": 13, "dir": 14},
+        "back_right": {"pwm": 4, "dir": 5},
+        "extra_motor": {"pwm": 23, "dir": 25},
     },
 }
 
