@@ -1,6 +1,6 @@
 from motor_library import *
 
-set_motor_config("NINE")  # Change as needed for your device
+set_motor_config("SIX")  # Change as needed for your device
 
 stop_all()
 print("All motors stopped and system ready.")
@@ -20,20 +20,25 @@ while True:
     wait(1)
 
     # ---------------- Mecanum Movements ----------------
-    movement("front_right", speed=100, duration=2, direction=1)
+    run("front_right", speed=100, direction=1)
     wait(2)
     
-    movement("front_left", speed=100, duration=2, direction=1)
+    run("front_left", speed=100, direction=1)
     wait(2)
+    stop("front_right");
     
-    movement("back_right", speed=100, duration=2, direction=1)
+    run("back_right", speed=100, direction=1)
     wait(2)
+    stop("front_left");
     
-    movement("back_left", speed=100, duration=2, direction=1)
+    run("back_left", speed=100, direction=1)
     wait(2)
+    stop("back_right")
     
-    movement("extra_motor", speed=100, duration=2, direction =1)
+    run("extra_motor", speed=100, direction =1)
     wait(2)
+    stop("back_left")
+    stop("extra_motor")
 
     # Stop all motors at the end
     stop_all()
