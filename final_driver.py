@@ -1,6 +1,25 @@
 from machine import Pin, PWM
 import time
 
+# ===== HARD FAIL-SAFE RESET (runs after Thonny STOP, crash, reboot) =====
+
+ALL_PWM_PINS = [4, 5, 13, 14, 16, 17, 18, 19, 23, 25]
+ALL_DIR_PINS = [5, 4, 14, 13, 17, 16, 19, 18, 25, 23]
+
+for p in ALL_PWM_PINS:
+    try:
+        PWM(Pin(p)).deinit()
+    except:
+        pass
+
+for p in ALL_DIR_PINS:
+    try:
+        Pin(p, Pin.OUT).value(0)
+    except:
+        pass
+# ======================================================================
+
+
 # Replace default wait with safety-checked wait
 def wait(duration):
     interval = 0.05
@@ -60,15 +79,15 @@ servo4 = Servo(26)
 # ---------------- Motor Configurations ----------------
 motor_configs = {
     "ONE": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
+        "front_left": {"pwm": 4, "dir": 5},
+        "front_right": {"pwm": 13, "dir": 14},
+        "back_left": {"pwm": 18, "dir": 19},
+        "back_right": {"pwm": 17, "dir": 16},
+        "extra_motor": {"pwm": 25, "dir": 23},
     },
     "TWO": {
-        "front_left": {"pwm": 23, "dir": 25},
-        "front_right": {"pwm": 18, "dir": 19},
+        "front_left": {"pwm": 18, "dir": 19},
+        "front_right": {"pwm": 23, "dir": 25},
         "back_left": {"pwm": 16, "dir": 17},
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
@@ -466,5 +485,19 @@ def movement(motion, speed=100, duration=1.5, direction=1):
         elapsed += interval
 
     stop_all()
+    
+    # ---------------- NON-BLOCKING MOTOR CONTROL ----------------
+def run(name, speed=100, direction=1):
+    check_stop()
+    if name in motors:
+        motors[name]["dir"].value(direction)
+        duty = int(max(0, min(100, speed)) * 1023 // 100)
+        motors[name]["pwm"].duty(duty)
+
+def stop(name):
+    if name in motors:
+        motors[name]["pwm"].duty(0)
+
+
 
 
