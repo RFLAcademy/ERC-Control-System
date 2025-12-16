@@ -1,5 +1,38 @@
-from machine import Pin, PWM
+from machine import Pin, PWM, I2C, ADC
 import time
+import ssd1306
+
+# -------- OLED INIT --------
+i2c = I2C(0, scl=Pin(22), sda=Pin(21))
+oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+
+def oled_clear():
+    oled.fill(0)
+    oled.show()
+
+def oled_status(line1="", line2="", line3="", line4=""):
+    oled.fill(0)
+    oled.text(line1, 0, 0)
+    oled.text(line2, 0, 18)
+    oled.text(line3, 0, 36)
+    oled.text(line4, 0, 55)
+    oled.show()
+
+def oled_mode(mode):
+    oled.fill(0)
+    oled.text("MODE", 40, 0)
+    oled.text(mode, 40, 25)
+    oled.show()
+    
+_adc1 = ADC(Pin(39))  # VN
+_adc2 = ADC(Pin(36))  # VP
+_adc3 = ADC(Pin(35))  # D35
+
+for a in (_adc1, _adc2, _adc3):
+    a.atten(ADC.ATTN_11DB)
+    a.width(ADC.WIDTH_12BIT)
+
+THRESHOLD = 2000   # set once here
 
 # ===== HARD FAIL-SAFE RESET (runs after Thonny STOP, crash, reboot) =====
 
@@ -677,4 +710,21 @@ def stop_drive(motion=None):
     stop_all()
     _current_motion = None
 
+def sensor_1():
+    if _adc1.read() > THRESHOLD:
+        return 1 
+    else:
+        return 0
+
+def sensor_2():
+    if _adc2.read() > THRESHOLD:
+        return 1
+    else:
+        return 0
+
+def sensor_3():
+    if _adc3.read() > THRESHOLD:
+        return 1
+    else:
+        return 0
 
