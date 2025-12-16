@@ -287,6 +287,7 @@ motor_configs = {
 # ---------------- Global Motors ----------------
 motors = {}
 _running = False
+_current_motion = None
 
 
 def set_motor_config(config_id):
@@ -299,7 +300,7 @@ def set_motor_config(config_id):
     motors = {}
     for name, pin in motor_configs[config_id].items():
         motors[name] = {
-            "pwm": PWM(Pin(pin["pwm"]), freq=1000),
+            "pwm": PWM(Pin(pin["pwm"]), freq=50),
             "dir": Pin(pin["dir"], Pin.OUT)
         }
         motors[name]["pwm"].duty(0)
@@ -497,7 +498,183 @@ def run(name, speed=100, direction=1):
 def stop(name):
     if name in motors:
         motors[name]["pwm"].duty(0)
+        
+# ================= NON-BLOCKING MOVEMENTS =================
+
+MIN_DUTY = 520   # tune between 200–350 depending on motors
+
+def _calc_duty(speed):
+    speed = max(0, min(100, speed))
+    if speed == 0:
+        return 0
+    duty = int(speed * 1023 // 100)
+    return max(duty, MIN_DUTY)
 
 
+def FW(speed=100):
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "FW" 
+    duty = _calc_duty(speed)
+
+    motors["front_left"]["dir"].value(0)
+    motors["front_right"]["dir"].value(1)
+    motors["back_left"]["dir"].value(0)
+    motors["back_right"]["dir"].value(1)
+
+    for m in ["front_left","front_right","back_left","back_right"]:
+        motors[m]["pwm"].duty(duty)
+
+
+def BW(speed=100):
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "BW" 
+    duty = _calc_duty(speed)
+
+    motors["front_left"]["dir"].value(1)
+    motors["front_right"]["dir"].value(0)
+    motors["back_left"]["dir"].value(1)
+    motors["back_right"]["dir"].value(0)
+
+    for m in ["front_left","front_right","back_left","back_right"]:
+        motors[m]["pwm"].duty(duty)
+
+
+def L(speed=100):
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "L" 
+    duty = _calc_duty(speed)
+
+    motors["front_left"]["dir"].value(1)
+    motors["front_right"]["dir"].value(1)
+    motors["back_left"]["dir"].value(0)
+    motors["back_right"]["dir"].value(0)
+
+    for m in ["front_left","front_right","back_left","back_right"]:
+        motors[m]["pwm"].duty(duty)
+
+
+def R(speed=100):
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "R" 
+    duty = _calc_duty(speed)
+
+    motors["front_left"]["dir"].value(0)
+    motors["front_right"]["dir"].value(0)
+    motors["back_left"]["dir"].value(1)
+    motors["back_right"]["dir"].value(1)
+
+    for m in ["front_left","front_right","back_left","back_right"]:
+        motors[m]["pwm"].duty(duty)
+
+
+def CCW(speed=100):
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "CCW" 
+    duty = _calc_duty(speed)
+
+    for m in ["front_left","front_right","back_left","back_right"]:
+        motors[m]["dir"].value(1)
+        motors[m]["pwm"].duty(duty)
+
+
+def CW(speed=100):
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "CW" 
+    duty = _calc_duty(speed)
+
+    for m in ["front_left","front_right","back_left","back_right"]:
+        motors[m]["dir"].value(0)
+        motors[m]["pwm"].duty(duty)
+
+
+def FL(speed=100):  # Forward Left
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "FL" 
+    duty = _calc_duty(speed)
+
+    motors["front_right"]["dir"].value(1)
+    motors["back_left"]["dir"].value(0)
+
+    motors["front_right"]["pwm"].duty(duty)
+    motors["back_left"]["pwm"].duty(duty)
+    motors["front_left"]["pwm"].duty(0)
+    motors["back_right"]["pwm"].duty(0)
+
+
+def FR(speed=100):  # Forward Right
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "FR" 
+    duty = _calc_duty(speed)
+
+    motors["front_left"]["dir"].value(0)
+    motors["back_right"]["dir"].value(1)
+
+    motors["front_left"]["pwm"].duty(duty)
+    motors["back_right"]["pwm"].duty(duty)
+    motors["front_right"]["pwm"].duty(0)
+    motors["back_left"]["pwm"].duty(0)
+
+
+def BR(speed=100):  # Backward Left
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "BR" 
+    duty = _calc_duty(speed)
+
+    motors["front_right"]["dir"].value(0)
+    motors["back_left"]["dir"].value(1)
+
+    motors["front_right"]["pwm"].duty(duty)
+    motors["back_left"]["pwm"].duty(duty)
+    motors["front_left"]["pwm"].duty(0)
+    motors["back_right"]["pwm"].duty(0)
+
+
+def BL(speed=100):  # Backward Right
+    global _current_motion
+    check_stop()
+    if not _running:
+        stop_all(); return
+    _current_motion = "BL" 
+    duty = _calc_duty(speed)
+
+    motors["front_left"]["dir"].value(1)
+    motors["back_right"]["dir"].value(0)
+
+    motors["front_left"]["pwm"].duty(duty)
+    motors["back_right"]["pwm"].duty(duty)
+    motors["front_right"]["pwm"].duty(0)
+    motors["back_left"]["pwm"].duty(0)
+    
+def stop_drive(motion=None):
+    global _current_motion
+    stop_all()
+    _current_motion = None
 
 
