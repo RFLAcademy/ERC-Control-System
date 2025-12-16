@@ -5,6 +5,8 @@ set_motor_config("SIX")  # Change as needed for your device
 stop_all()
 print("All motors stopped and system ready.")
 
+oled_status("   RFL ACADEMY", "System Ready", "Press START", "Hello Prashant")
+
 while True:
     # Wait until START button is pressed
     wait_for_start()
