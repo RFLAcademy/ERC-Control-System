@@ -1,5 +1,6 @@
 from machine import Pin, PWM, I2C, ADC
 import time
+import machine
 import ssd1306
 
 # -------- OLED INIT --------
@@ -382,27 +383,29 @@ def wait_for_start():
 
 def check_stop():
     global _running
+
     if button_stop.value() == 0:
         stop_all()
         _running = False
-        print("EMERGENCY STOP! LED blinking for 5 sec...")
 
-        # Blink LED for 5 seconds
-        blink_time = 5
-        interval = 0.2
-        elapsed = 0
-        while elapsed < blink_time:
-            led_warning.value(1)
-            time.sleep(interval)
-            led_warning.value(0)
-            time.sleep(interval)
-            elapsed += interval * 2
+        print("EMERGENCY STOP! System halted.")
+        oled_status("SYSTEM STOPPED", "Press START", "", "")
+        led_warning.value(1)
 
-        print("Waiting for STOP release...")
+        # Wait until STOP released
         while button_stop.value() == 0:
             time.sleep(0.05)
 
-        led_warning.value(0)  # Ensure LED off after release
+        # Wait for START press
+        while button_start.value() == 0:
+            time.sleep(0.05)
+
+        print("Restarting system...")
+        led_warning.value(0)
+        time.sleep(0.2)
+
+        machine.reset()   # FULL RESTART
+
         
 def led_on():
     led_warning.value(1)
@@ -727,4 +730,5 @@ def sensor_3():
         return 1
     else:
         return 0
+
 
