@@ -97,10 +97,14 @@ class Servo:
         self.pwm.freq(50)
 
     def pos(self, position):
-        check_stop()
+        """
+        position: float between 0.0 (min) and 1.0 (max)
+        """
         position = max(0.0, min(1.0, position))
+        # Convert normalized position to duty cycle (40-115)
         duty = int(40 + position * 75)
         self.pwm.duty(duty)
+
 
 
 # ---------------- Servo Instances ----------------
@@ -404,7 +408,7 @@ def check_stop():
         led_warning.value(0)
         time.sleep(0.2)
 
-        machine.reset()   # FULL RESTART
+        machine.reset()   # 🔁 FULL RESTART
 
         
 def led_on():
