@@ -96,14 +96,21 @@ class Servo:
         self.pwm = PWM(Pin(pin))
         self.pwm.freq(50)
 
+        # Calibrated limits (adjust if needed)
+        self.min_duty = 26     # ~0°
+        self.max_duty = 124    # ~180°
+
     def pos(self, position):
         """
-        position: float between 0.0 (min) and 1.0 (max)
+        position: 0.0 (min) to 1.0 (max)
         """
         position = max(0.0, min(1.0, position))
-        # Convert normalized position to duty cycle (40-115)
-        duty = int(40 + position * 75)
+        duty = int(
+            self.min_duty +
+            position * (self.max_duty - self.min_duty)
+        )
         self.pwm.duty(duty)
+
 
 
 
