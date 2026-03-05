@@ -6,9 +6,9 @@ stop_all()
 print("All motors stopped and system ready.")
 
 oled_status("   RFL ACADEMY", "System Ready", "Press START", "Hello Prashant")
-wait_for_start()
 
 while True:
+    wait_for_start()
     # Wait until START button is pressed
    
     if sensor_3() == 1:
@@ -94,5 +94,6 @@ while True:
     # Stop all motors at the end
 #     stop_all()
 #     print("Sequence completed. All motors stopped.")
+
 
 
