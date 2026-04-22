@@ -158,7 +158,7 @@ motor_configs = {
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "SIX": {
+    "SIX": {    #OSHIWARA
         "front_left": {"pwm": 23, "dir": 25},
         "front_right": {"pwm": 19, "dir": 18},
         "back_left": {"pwm": 16, "dir": 17},
@@ -193,7 +193,7 @@ motor_configs = {
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "ELEVEN": {
+    "ELEVEN": {     #OSHIWARA
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 19, "dir": 18},
         "back_left": {"pwm": 17, "dir": 16},
@@ -207,7 +207,7 @@ motor_configs = {
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "THIRTEEN": {
+    "THIRTEEN": {      #SOBO MUMBAI
         "front_left": {"pwm": 5, "dir": 4},
         "front_right": {"pwm": 14, "dir": 13},
         "back_left": {"pwm": 17, "dir": 16},
