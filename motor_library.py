@@ -163,7 +163,7 @@ motor_configs = {
         "front_right": {"pwm": 19, "dir": 18},
         "back_left": {"pwm": 16, "dir": 17},
         "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 4, "dir": 5},
+        "extra_motor": {"pwm": 5, "dir": 4},
     },
     "SEVEN": {
         "front_left": {"pwm": 25, "dir": 23},
@@ -208,11 +208,11 @@ motor_configs = {
         "extra_motor": {"pwm": 4, "dir": 5},
     },
     "THIRTEEN": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
+        "front_left": {"pwm": 5, "dir": 4},
+        "front_right": {"pwm": 14, "dir": 13},
         "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
+        "back_right": {"pwm": 19, "dir": 18},
+        "extra_motor": {"pwm": 25, "dir": 23},
     },
     "FOURTEEN": {
         "front_left": {"pwm": 5, "dir": 4},
@@ -741,5 +741,7 @@ def sensor_3():
         return 1
     else:
         return 0
+
+
 
 
