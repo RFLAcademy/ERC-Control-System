@@ -200,7 +200,7 @@ motor_configs = {
         "back_right": {"pwm": 14, "dir": 13},
         "extra_motor": {"pwm": 5, "dir": 4},
     },
-    "TWELVE": {
+    "TWELVE": {        #SOBO MUMBAI
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 18, "dir": 19},
         "back_left": {"pwm": 17, "dir": 16},
@@ -214,42 +214,42 @@ motor_configs = {
         "back_right": {"pwm": 19, "dir": 18},
         "extra_motor": {"pwm": 25, "dir": 23},
     },
-    "FOURTEEN": {
+    "FOURTEEN": {     #SURAT
         "front_left": {"pwm": 5, "dir": 4},
         "front_right": {"pwm": 14, "dir": 13},
         "back_left": {"pwm": 18, "dir": 19},
         "back_right": {"pwm": 16, "dir": 17},
         "extra_motor": {"pwm": 25, "dir": 23},
     },
-    "FIFTEEN": {
+    "FIFTEEN": {      #SURAT
         "front_left": {"pwm": 19, "dir": 18},
         "front_right": {"pwm": 17, "dir": 16},
         "back_left": {"pwm": 13, "dir": 14},
         "back_right": {"pwm": 4, "dir": 5},
         "extra_motor": {"pwm": 25, "dir": 13},
     },
-    "SIXTEEN": {
+    "SIXTEEN": {      #SURAT
         "front_left": {"pwm": 5, "dir": 4},
         "front_right": {"pwm": 19, "dir": 18},
         "back_left": {"pwm": 17, "dir": 16},
         "back_right": {"pwm": 14, "dir": 13},
         "extra_motor": {"pwm": 23, "dir": 25},
     },
-    "SEVENTEEN": {
+    "SEVENTEEN": {     #SURAT
         "front_left": {"pwm": 18, "dir": 19},
         "front_right": {"pwm": 23, "dir": 25},
         "back_left": {"pwm": 13, "dir": 14},
         "back_right": {"pwm": 17, "dir": 16},
         "extra_motor": {"pwm": 5, "dir": 4},
     },
-    "EIGHTEEN": {
+    "EIGHTEEN": {      #SURAT
         "front_left": {"pwm": 14, "dir": 13},
         "front_right": {"pwm": 5, "dir": 4},
         "back_left": {"pwm": 18, "dir": 19},
         "back_right": {"pwm": 16, "dir": 17},
         "extra_motor": {"pwm": 23, "dir": 25},
     },
-    "NINETEEN": {
+    "NINETEEN": {       #SURAT
         "front_left": {"pwm": 18, "dir": 19},
         "front_right": {"pwm": 23, "dir": 25},
         "back_left": {"pwm": 13, "dir": 14},
