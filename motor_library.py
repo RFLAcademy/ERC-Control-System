@@ -193,7 +193,7 @@ motor_configs = {
         "back_right": {"pwm": 13, "dir": 14},
         "extra_motor": {"pwm": 4, "dir": 5},
     },
-    "ELEVEN": {     #OSHIWARA
+    "ELEVEN": {     #JUHU
         "front_left": {"pwm": 25, "dir": 23},
         "front_right": {"pwm": 19, "dir": 18},
         "back_left": {"pwm": 17, "dir": 16},
