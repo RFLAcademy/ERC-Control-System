@@ -320,13 +320,6 @@ motor_configs = {
         "back_right": {"pwm": 14, "dir": 13},
         "extra_motor": {"pwm": 5, "dir": 4},
     },
-    "THIRTY": {      #YET TO CONFIRM
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 6},
-    },
 }
 
 
@@ -727,3 +720,188 @@ def sensor_3():
     else:
         return 0
 
+# ================================================================
+# ADD THIS BLOCK TO THE BOTTOM OF motor_library.py
+# ================================================================
+
+import network
+import uasyncio as asyncio
+import ujson
+
+# -------- WiFi AP CONFIG (fill these in) --------
+AP_SSID     = "YOUR_SSID_HERE"       # e.g. "RFL_BOT"
+AP_PASSWORD = "YOUR_PASSWORD_HERE"   # e.g. "12345678"
+WS_PORT     = 8765
+# ------------------------------------------------
+
+def start_ap():
+    ap = network.WLAN(network.AP_IF)
+    ap.active(True)
+    ap.config(essid=AP_SSID, password=AP_PASSWORD, authmode=3)
+    while not ap.active():
+        time.sleep(0.1)
+    ip = ap.ifconfig()[0]
+    print("AP ready  SSID:", AP_SSID, "  IP:", ip)
+    oled_status("WiFi AP Ready", AP_SSID, ip, "Port:" + str(WS_PORT))
+    return ip
+
+
+# -------- KEY → MOTION MAP --------
+_KEY_MAP = {
+    "w":      FW,
+    "s":      BW,
+    "a":      L,
+    "d":      R,
+    "q":      CCW,
+    "e":      CW,
+    "z":      FL,
+    "x":      FR,
+    "c":      BL,
+    "v":      BR,
+}
+
+def _handle_command(cmd):
+    """
+    cmd is a dict:
+      { "type": "keydown", "key": "w" }
+      { "type": "keyup" }
+      { "type": "speed", "value": 75 }
+    """
+    global _ws_speed
+    t = cmd.get("type")
+
+    if t == "speed":
+        _ws_speed = int(cmd.get("value", 100))
+        return
+
+    if t == "keyup":
+        stop_all()
+        return
+
+    if t == "keydown":
+        key = cmd.get("key", "").lower()
+        if key == " " or key == "stop":
+            stop_all()
+            return
+        fn = _KEY_MAP.get(key)
+        if fn:
+            fn(speed=_ws_speed)
+        return
+
+_ws_speed = 100   # default speed, adjustable from UI
+
+
+# -------- WEBSOCKET SERVER --------
+# Minimal WebSocket handshake + frame parser for MicroPython
+
+import ubinascii, uhashlib
+
+def _ws_handshake(reader, writer):
+    # Read HTTP upgrade request
+    key = None
+    while True:
+        line = yield from reader.readline()
+        line = line.decode()
+        if line.startswith("Sec-WebSocket-Key"):
+            key = line.split(": ")[1].strip()
+        if line == "\r\n":
+            break
+
+    # Send 101 Switching Protocols
+    magic  = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    accept = ubinascii.b2a_base64(
+        uhashlib.sha1((key + magic).encode()).digest()
+    ).decode().strip()
+
+    response = (
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        "Sec-WebSocket-Accept: {}\r\n\r\n"
+    ).format(accept)
+    writer.write(response.encode())
+    yield from writer.drain()
+
+
+async def _ws_read_frame(reader):
+    header = await reader.readexactly(2)
+    b1, b2 = header[0], header[1]
+    masked = (b2 & 0x80) != 0
+    length = b2 & 0x7F
+
+    if length == 126:
+        data = await reader.readexactly(2)
+        length = (data[0] << 8) | data[1]
+    elif length == 127:
+        data = await reader.readexactly(8)
+        length = int.from_bytes(data, "big")
+
+    mask = None
+    if masked:
+        mask = await reader.readexactly(4)
+
+    payload = await reader.readexactly(length)
+
+    if masked:
+        payload = bytes(payload[i] ^ mask[i % 4] for i in range(length))
+
+    return payload.decode("utf-8")
+
+
+async def _ws_client_handler(reader, writer):
+    # Handshake
+    key = None
+    headers = {}
+    while True:
+        line = await reader.readline()
+        line = line.decode("utf-8", "ignore")
+        if line == "\r\n":
+            break
+        if ":" in line:
+            k, v = line.split(":", 1)
+            headers[k.strip()] = v.strip()
+
+    key = headers.get("Sec-WebSocket-Key", "")
+    magic  = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    accept = ubinascii.b2a_base64(
+        uhashlib.sha1((key + magic).encode()).digest()
+    ).decode().strip()
+
+    response = (
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        "Sec-WebSocket-Accept: {}\r\n\r\n"
+    ).format(accept)
+    writer.write(response.encode())
+    await writer.drain()
+    print("WebSocket client connected")
+
+    try:
+        while True:
+            text = await _ws_read_frame(reader)
+            try:
+                cmd = ujson.loads(text)
+                _handle_command(cmd)
+            except Exception as e:
+                print("Bad command:", e)
+    except Exception as e:
+        print("Client disconnected:", e)
+        stop_all()
+
+
+async def _run_server():
+    server = await asyncio.start_server(_ws_client_handler, "0.0.0.0", WS_PORT)
+    print("WebSocket server listening on port", WS_PORT)
+    await server.wait_closed()
+
+
+def start_keyboard_control():
+    """
+    Call this from main.py.
+    Starts AP, then runs the WebSocket server forever.
+    """
+    global _running
+    _running = True
+    start_ap()
+    asyncio.run(_run_server())
