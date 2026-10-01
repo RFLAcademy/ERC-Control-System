@@ -1,22 +1,188 @@
 from machine import Pin, PWM, I2C, ADC
 import time
 import machine
-import ssd1306
 
+# ================================================================
+# BUILT IN SSD1306 OLED DRIVER
+# ================================================================
+
+class SSD1306:
+    def __init__(self, width, height, i2c, addr=0x3C):
+        self.width = width
+        self.height = height
+        self.i2c = i2c
+        self.addr = addr
+        self.buffer = bytearray(width * height // 8)
+
+        self._init_display()
+
+    def _cmd(self, cmd):
+        self.i2c.writeto(self.addr, bytearray([0x00, cmd]))
+
+    def _init_display(self):
+        commands = (
+            0xAE,
+            0x20, 0x00,
+            0x40,
+            0xA1,
+            0xC8,
+            0x81, 0x7F,
+            0xA8, 0x3F,
+            0xD3, 0x00,
+            0xD5, 0x80,
+            0xD9, 0xF1,
+            0xDA, 0x12,
+            0xDB, 0x40,
+            0x8D, 0x14,
+            0xA4,
+            0xA6,
+            0xAF
+        )
+
+        for cmd in commands:
+            self._cmd(cmd)
+
+    def fill(self, color):
+        value = 0xFF if color else 0x00
+
+        for i in range(len(self.buffer)):
+            self.buffer[i] = value
+
+    def pixel(self, x, y, color=1):
+        if x < 0 or x >= self.width:
+            return
+
+        if y < 0 or y >= self.height:
+            return
+
+        index = x + (y // 8) * self.width
+        mask = 1 << (y & 7)
+
+        if color:
+            self.buffer[index] |= mask
+        else:
+            self.buffer[index] &= ~mask
+
+    def text(self, text, x, y):
+        for char in text:
+            self._char(char, x, y)
+            x += 8
+
+            if x >= self.width:
+                x = 0
+                y += 8
+
+            if y >= self.height:
+                break
+
+    def _char(self, char, x, y):
+        if char == " ":
+            return
+
+        # Basic 5x8 font
+        font = self._font(char)
+
+        for col in range(5):
+            data = font[col]
+
+            for row in range(8):
+                if data & (1 << row):
+                    self.pixel(x + col, y + row, 1)
+
+    def _font(self, char):
+        font = {
+            "A": (0x7E,0x11,0x11,0x11,0x7E),
+            "B": (0x7F,0x49,0x49,0x49,0x36),
+            "C": (0x3E,0x41,0x41,0x41,0x22),
+            "D": (0x7F,0x41,0x41,0x22,0x1C),
+            "E": (0x7F,0x49,0x49,0x49,0x41),
+            "F": (0x7F,0x09,0x09,0x09,0x01),
+            "G": (0x3E,0x41,0x49,0x49,0x7A),
+            "H": (0x7F,0x08,0x08,0x08,0x7F),
+            "I": (0x41,0x41,0x7F,0x41,0x41),
+            "J": (0x20,0x40,0x41,0x3F,0x01),
+            "K": (0x7F,0x08,0x14,0x22,0x41),
+            "L": (0x7F,0x40,0x40,0x40,0x40),
+            "M": (0x7F,0x02,0x0C,0x02,0x7F),
+            "N": (0x7F,0x04,0x08,0x10,0x7F),
+            "O": (0x3E,0x41,0x41,0x41,0x3E),
+            "P": (0x7F,0x09,0x09,0x09,0x06),
+            "Q": (0x3E,0x41,0x51,0x21,0x5E),
+            "R": (0x7F,0x09,0x19,0x29,0x46),
+            "S": (0x46,0x49,0x49,0x49,0x31),
+            "T": (0x01,0x01,0x7F,0x01,0x01),
+            "U": (0x3F,0x40,0x40,0x40,0x3F),
+            "V": (0x1F,0x20,0x40,0x20,0x1F),
+            "W": (0x7F,0x20,0x18,0x20,0x7F),
+            "X": (0x63,0x14,0x08,0x14,0x63),
+            "Y": (0x07,0x08,0x70,0x08,0x07),
+            "Z": (0x61,0x51,0x49,0x45,0x43),
+
+            "0": (0x3E,0x45,0x49,0x51,0x3E),
+            "1": (0x00,0x21,0x7F,0x01,0x00),
+            "2": (0x21,0x43,0x45,0x49,0x31),
+            "3": (0x42,0x41,0x51,0x69,0x46),
+            "4": (0x0C,0x14,0x24,0x7F,0x04),
+            "5": (0x72,0x51,0x51,0x51,0x4E),
+            "6": (0x1E,0x29,0x49,0x49,0x06),
+            "7": (0x40,0x47,0x48,0x50,0x60),
+            "8": (0x36,0x49,0x49,0x49,0x36),
+            "9": (0x30,0x49,0x49,0x4A,0x3C),
+
+            ":": (0x00,0x36,0x36,0x00,0x00),
+            ".": (0x00,0x60,0x60,0x00,0x00),
+            "-": (0x08,0x08,0x08,0x08,0x08),
+            "%": (0x63,0x13,0x08,0x64,0x63),
+            "_": (0x40,0x40,0x40,0x40,0x40)
+        }
+
+        char = char.upper()
+
+        if char in font:
+            return font[char]
+
+        return (0, 0, 0, 0, 0)
+
+    def show(self):
+        for page in range(8):
+            self._cmd(0xB0 + page)
+            self._cmd(0x00)
+            self._cmd(0x10)
+
+            start = page * self.width
+            end = start + self.width
+
+            self.i2c.writeto(
+                self.addr,
+                bytearray([0x40]) + self.buffer[start:end]
+            )
+
+
+# ================================================================
+# OLED INIT
+# ================================================================
 # -------- OLED INIT --------
 i2c = I2C(0, scl=Pin(22), sda=Pin(21))
-oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+oled = SSD1306(128, 64, i2c)
+
 
 def oled_clear():
     oled.fill(0)
     oled.show()
+    
+_stop_active = False
 
 def oled_status(line1="", line2="", line3="", line4=""):
+    global _stop_active
+
+    if _stop_active:
+        return
+
     oled.fill(0)
     oled.text(line1, 0, 0)
-    oled.text(line2, 0, 18)
-    oled.text(line3, 0, 36)
-    oled.text(line4, 0, 55)
+    oled.text(line2, 0, 16)
+    oled.text(line3, 0, 32)
+    oled.text(line4, 0, 48)
     oled.show()
 
 def oled_mode(mode):
@@ -40,11 +206,6 @@ THRESHOLD = 2000   # set once here
 ALL_PWM_PINS = [4, 5, 13, 14, 16, 17, 18, 19, 23, 25]
 ALL_DIR_PINS = [5, 4, 14, 13, 17, 16, 19, 18, 25, 23]
 
-for p in ALL_PWM_PINS:
-    try:
-        PWM(Pin(p)).deinit()
-    except:
-        pass
 
 for p in ALL_DIR_PINS:
     try:
@@ -58,31 +219,29 @@ for p in ALL_DIR_PINS:
 
 def wait(duration):
     end = time.ticks_add(time.ticks_ms(), int(duration * 1000))
+
     while time.ticks_diff(end, time.ticks_ms()) > 0:
-        time.sleep_ms(10)  # small sleep
+
+        if button_stop.value() == 0:
+            check_stop()
+
+            if not _running:
+                return
+
+        time.sleep_ms(10)
 
 # ---------------- FAIL-SAFE MOTOR RESET ----------------
 def _reset_all_pwm_and_dir():
-    used_pwm_pins = set()
-    used_dir_pins = set()
-
-    for cfg in motor_configs.values():
-        for motor in cfg.values():
-            used_pwm_pins.add(motor["pwm"])
-            used_dir_pins.add(motor["dir"])
-
-    for p in used_pwm_pins:
+    for m in motors.values():
         try:
-            PWM(Pin(p)).deinit()
+            m["pwm"].deinit()
         except:
             pass
 
-    for p in used_dir_pins:
         try:
-            Pin(p, Pin.OUT).value(0)
+            m["dir"].value(0)
         except:
             pass
-
 
 # ---------------- Servo Class ----------------
 class Servo:
@@ -320,6 +479,13 @@ motor_configs = {
         "back_right": {"pwm": 14, "dir": 13},
         "extra_motor": {"pwm": 5, "dir": 4},
     },
+    "THIRTY": {
+        "front_left": {"pwm": 25, "dir": 23},
+        "front_right": {"pwm": 19, "dir": 18},
+        "back_left": {"pwm": 17, "dir": 16},
+        "back_right": {"pwm": 14, "dir": 13},
+        "extra_motor": {"pwm": 5, "dir": 4},
+    },
 }
 
 
@@ -369,6 +535,11 @@ def stop_all():
         except:
             pass
 
+        try:
+            motors[m]["dir"].value(0)
+        except:
+            pass
+
 
 # ---------------- Buttons ----------------
 button_start = Pin(34, Pin.IN, Pin.PULL_DOWN)
@@ -378,22 +549,76 @@ buzzer_pin = Pin(15, Pin.OUT)
 
 
 def wait_for_start():
-    global _running
+    global _running, _stop_active
+
     print("Waiting for START button (D34)...")
+
     while button_start.value() == 0:
-        wait(0.01)
-    print("START pressed!")
+        time.sleep_ms(20)
+
+    _stop_active = False
     _running = True
+
+    print("START pressed!")
+
+    oled.fill(0)
+    oled.text("RFL ACADEMY", 0, 0)
+    oled.text("System Running", 0, 16)
+    oled.text("START PRESSED", 0, 32)
+    oled.show()
 
 
 def check_stop():
-    global _running
+    global _running, _stop_active
 
     if button_stop.value() == 0:
+
         stop_all()
         _running = False
-        led_warning.value(1)
+
+        _stop_active = True
+
+        oled.fill(0)
+        oled.text("RFL ACADEMY", 0, 0)
+        oled.text("STOP PRESSED", 0, 16)
+        oled.text("Motors Stopped", 0, 32)
+        oled.show()
+
         print("STOP pressed")
+        print("Motors stopped")
+
+        for _ in range(5):
+
+            led_warning.value(1)
+            buzzer_pin.value(1)
+
+            oled.fill(0)
+            oled.text("RFL ACADEMY", 0, 0)
+            oled.text("STOP PRESSED", 0, 16)
+            oled.text("WARNING", 0, 32)
+            oled.show()
+
+            time.sleep(0.2)
+
+            led_warning.value(0)
+            buzzer_pin.value(0)
+
+            time.sleep(0.2)
+
+        led_warning.value(0)
+        buzzer_pin.value(0)
+
+        oled.fill(0)
+        oled.text("RFL ACADEMY", 0, 0)
+        oled.text("System Ready", 0, 16)
+        oled.text("Wait for START", 0, 32)
+        oled.show()
+
+        print("STOP alert completed")
+        print("System ready for START")
+
+        while button_stop.value() == 0:
+            time.sleep_ms(20)
 
         
 def led_on():
