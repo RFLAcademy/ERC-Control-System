@@ -1,182 +1,87 @@
 from machine import Pin, PWM, I2C, ADC
 import time
 import machine
+import gc
 
 # ================================================================
 # BUILT IN SSD1306 OLED DRIVER
 # ================================================================
 
-class SSD1306:
+import framebuf
+
+class SSD1306(framebuf.FrameBuffer):
+    # Uses MicroPython's built-in framebuf (font included) - small and fast
     def __init__(self, width, height, i2c, addr=0x3C):
         self.width = width
         self.height = height
         self.i2c = i2c
         self.addr = addr
         self.buffer = bytearray(width * height // 8)
-
+        super().__init__(self.buffer, width, height, framebuf.MONO_VLSB)
         self._init_display()
 
     def _cmd(self, cmd):
         self.i2c.writeto(self.addr, bytearray([0x00, cmd]))
 
     def _init_display(self):
-        commands = (
-            0xAE,
-            0x20, 0x00,
-            0x40,
-            0xA1,
-            0xC8,
-            0x81, 0x7F,
-            0xA8, 0x3F,
-            0xD3, 0x00,
-            0xD5, 0x80,
-            0xD9, 0xF1,
-            0xDA, 0x12,
-            0xDB, 0x40,
-            0x8D, 0x14,
-            0xA4,
-            0xA6,
-            0xAF
-        )
-
-        for cmd in commands:
+        for cmd in (0xAE, 0x20, 0x00, 0x40, 0xA1, 0xC8, 0x81, 0x7F,
+                    0xA8, 0x3F, 0xD3, 0x00, 0xD5, 0x80, 0xD9, 0xF1,
+                    0xDA, 0x12, 0xDB, 0x40, 0x8D, 0x14, 0xA4, 0xA6, 0xAF):
             self._cmd(cmd)
-
-    def fill(self, color):
-        value = 0xFF if color else 0x00
-
-        for i in range(len(self.buffer)):
-            self.buffer[i] = value
-
-    def pixel(self, x, y, color=1):
-        if x < 0 or x >= self.width:
-            return
-
-        if y < 0 or y >= self.height:
-            return
-
-        index = x + (y // 8) * self.width
-        mask = 1 << (y & 7)
-
-        if color:
-            self.buffer[index] |= mask
-        else:
-            self.buffer[index] &= ~mask
-
-    def text(self, text, x, y):
-        for char in text:
-            self._char(char, x, y)
-            x += 8
-
-            if x >= self.width:
-                x = 0
-                y += 8
-
-            if y >= self.height:
-                break
-
-    def _char(self, char, x, y):
-        if char == " ":
-            return
-
-        # Basic 5x8 font
-        font = self._font(char)
-
-        for col in range(5):
-            data = font[col]
-
-            for row in range(8):
-                if data & (1 << row):
-                    self.pixel(x + col, y + row, 1)
-
-    def _font(self, char):
-        font = {
-            "A": (0x7E,0x11,0x11,0x11,0x7E),
-            "B": (0x7F,0x49,0x49,0x49,0x36),
-            "C": (0x3E,0x41,0x41,0x41,0x22),
-            "D": (0x7F,0x41,0x41,0x22,0x1C),
-            "E": (0x7F,0x49,0x49,0x49,0x41),
-            "F": (0x7F,0x09,0x09,0x09,0x01),
-            "G": (0x3E,0x41,0x49,0x49,0x7A),
-            "H": (0x7F,0x08,0x08,0x08,0x7F),
-            "I": (0x41,0x41,0x7F,0x41,0x41),
-            "J": (0x20,0x40,0x41,0x3F,0x01),
-            "K": (0x7F,0x08,0x14,0x22,0x41),
-            "L": (0x7F,0x40,0x40,0x40,0x40),
-            "M": (0x7F,0x02,0x0C,0x02,0x7F),
-            "N": (0x7F,0x04,0x08,0x10,0x7F),
-            "O": (0x3E,0x41,0x41,0x41,0x3E),
-            "P": (0x7F,0x09,0x09,0x09,0x06),
-            "Q": (0x3E,0x41,0x51,0x21,0x5E),
-            "R": (0x7F,0x09,0x19,0x29,0x46),
-            "S": (0x46,0x49,0x49,0x49,0x31),
-            "T": (0x01,0x01,0x7F,0x01,0x01),
-            "U": (0x3F,0x40,0x40,0x40,0x3F),
-            "V": (0x1F,0x20,0x40,0x20,0x1F),
-            "W": (0x7F,0x20,0x18,0x20,0x7F),
-            "X": (0x63,0x14,0x08,0x14,0x63),
-            "Y": (0x07,0x08,0x70,0x08,0x07),
-            "Z": (0x61,0x51,0x49,0x45,0x43),
-
-            "0": (0x3E,0x45,0x49,0x51,0x3E),
-            "1": (0x00,0x21,0x7F,0x01,0x00),
-            "2": (0x21,0x43,0x45,0x49,0x31),
-            "3": (0x42,0x41,0x51,0x69,0x46),
-            "4": (0x0C,0x14,0x24,0x7F,0x04),
-            "5": (0x72,0x51,0x51,0x51,0x4E),
-            "6": (0x1E,0x29,0x49,0x49,0x06),
-            "7": (0x40,0x47,0x48,0x50,0x60),
-            "8": (0x36,0x49,0x49,0x49,0x36),
-            "9": (0x30,0x49,0x49,0x4A,0x3C),
-
-            ":": (0x00,0x36,0x36,0x00,0x00),
-            ".": (0x00,0x60,0x60,0x00,0x00),
-            "-": (0x08,0x08,0x08,0x08,0x08),
-            "%": (0x63,0x13,0x08,0x64,0x63),
-            "_": (0x40,0x40,0x40,0x40,0x40)
-        }
-
-        char = char.upper()
-
-        if char in font:
-            return font[char]
-
-        return (0, 0, 0, 0, 0)
 
     def show(self):
         for page in range(8):
             self._cmd(0xB0 + page)
             self._cmd(0x00)
             self._cmd(0x10)
-
             start = page * self.width
-            end = start + self.width
-
-            self.i2c.writeto(
-                self.addr,
-                bytearray([0x40]) + self.buffer[start:end]
-            )
+            self.i2c.writeto(self.addr,
+                             bytearray([0x40]) + self.buffer[start:start + self.width])
 
 
 # ================================================================
 # OLED INIT
 # ================================================================
 # -------- OLED INIT --------
+class _NoOLED:
+    """Used when no OLED is connected: screen calls do nothing."""
+    def fill(self, color): pass
+    def text(self, text, x, y): pass
+    def show(self): pass
+
+gc.collect()        # free memory used while loading, before starting I2C
 i2c = I2C(0, scl=Pin(22), sda=Pin(21))
-oled = SSD1306(128, 64, i2c)
+_i2c_found = []
+try:
+    _i2c_found = i2c.scan()
+    _oled_addr = 0x3D if (0x3D in _i2c_found and 0x3C not in _i2c_found) else 0x3C
+    oled = SSD1306(128, 64, i2c, _oled_addr)
+except OSError:
+    print("WARNING: OLED not found - running without screen.")
+    print("  Check wiring: SDA=21, SCL=22, VCC, GND")
+    print("  I2C devices found:", [hex(a) for a in _i2c_found])
+    oled = _NoOLED()
 
 
 def oled_clear():
+    global _oled_last
+    _oled_last = None
     oled.fill(0)
     oled.show()
     
 _stop_active = False
+_oled_last = None   # skip redrawing the same text (safe to call in a loop)
 
 def oled_status(line1="", line2="", line3="", line4=""):
-    global _stop_active
+    global _stop_active, _oled_last
 
     if _stop_active:
         return
+
+    lines = (line1, line2, line3, line4)
+    if lines == _oled_last:
+        return
+    _oled_last = lines
 
     oled.fill(0)
     oled.text(line1, 0, 0)
@@ -186,6 +91,8 @@ def oled_status(line1="", line2="", line3="", line4=""):
     oled.show()
 
 def oled_mode(mode):
+    global _oled_last
+    _oled_last = None
     oled.fill(0)
     oled.text("MODE", 40, 0)
     oled.text(mode, 40, 25)
@@ -210,7 +117,7 @@ ALL_DIR_PINS = [5, 4, 14, 13, 17, 16, 19, 18, 25, 23]
 for p in ALL_DIR_PINS:
     try:
         Pin(p, Pin.OUT).value(0)
-    except:
+    except Exception:
         pass
 # ======================================================================
 
@@ -235,12 +142,12 @@ def _reset_all_pwm_and_dir():
     for m in motors.values():
         try:
             m["pwm"].deinit()
-        except:
+        except Exception:
             pass
 
         try:
             m["dir"].value(0)
-        except:
+        except Exception:
             pass
 
 # ---------------- Servo Class ----------------
@@ -275,218 +182,41 @@ servo4 = Servo(26)
 
 
 # ---------------- Motor Configurations ----------------
+# Pins for each robot, in this order (pwm,dir for each motor):
+#   front_left | front_right | back_left | back_right | extra_motor
 motor_configs = {
-    "ONE": {
-        "front_left": {"pwm": 4, "dir": 5},
-        "front_right": {"pwm": 13, "dir": 14},
-        "back_left": {"pwm": 18, "dir": 19},
-        "back_right": {"pwm": 17, "dir": 16},
-        "extra_motor": {"pwm": 25, "dir": 23},
-    },
-    "TWO": {
-        "front_left": {"pwm": 18, "dir": 19},
-        "front_right": {"pwm": 23, "dir": 25},
-        "back_left": {"pwm": 16, "dir": 17},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "THREE": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "FOUR": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "FIVE": {
-        "front_left": {"pwm": 23, "dir": 25},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 16, "dir": 17},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "SIX": {
-        "front_left": {"pwm": 23, "dir": 25},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 16, "dir": 17},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "SEVEN": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "EIGHT": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "NINE": {
-        "front_left": {"pwm": 23, "dir": 25},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 16, "dir": 17},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "TEN": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "ELEVEN": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "TWELVE": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 18, "dir": 19},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 13, "dir": 14},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "THIRTEEN": {
-        "front_left": {"pwm": 14, "dir": 13},
-        "front_right": {"pwm": 5, "dir": 4},
-        "back_left": {"pwm": 19, "dir": 18},
-        "back_right": {"pwm": 17, "dir": 16},
-        "extra_motor": {"pwm": 25, "dir": 23},
-    },
-    "FOURTEEN": {
-        "front_left": {"pwm": 5, "dir": 4},
-        "front_right": {"pwm": 14, "dir": 13},
-        "back_left": {"pwm": 18, "dir": 19},
-        "back_right": {"pwm": 16, "dir": 17},
-        "extra_motor": {"pwm": 25, "dir": 23},
-    },
-    "FIFTEEN": {
-        "front_left": {"pwm": 19, "dir": 18},
-        "front_right": {"pwm": 17, "dir": 16},
-        "back_left": {"pwm": 13, "dir": 14},
-        "back_right": {"pwm": 4, "dir": 5},
-        "extra_motor": {"pwm": 25, "dir": 13},
-    },
-    "SIXTEEN": {
-        "front_left": {"pwm": 5, "dir": 4},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 23, "dir": 25},
-    },
-    "SEVENTEEN": {
-        "front_left": {"pwm": 18, "dir": 19},
-        "front_right": {"pwm": 23, "dir": 25},
-        "back_left": {"pwm": 13, "dir": 14},
-        "back_right": {"pwm": 17, "dir": 16},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "EIGHTEEN": {
-        "front_left": {"pwm": 14, "dir": 13},
-        "front_right": {"pwm": 5, "dir": 4},
-        "back_left": {"pwm": 18, "dir": 19},
-        "back_right": {"pwm": 16, "dir": 17},
-        "extra_motor": {"pwm": 23, "dir": 25},
-    },
-    "NINETEEN": {
-        "front_left": {"pwm": 18, "dir": 19},
-        "front_right": {"pwm": 23, "dir": 25},
-        "back_left": {"pwm": 13, "dir": 14},
-        "back_right": {"pwm": 16, "dir": 17},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "TWENTY": {
-        "front_left": {"pwm": 18, "dir": 19},
-        "front_right": {"pwm": 16, "dir": 17},
-        "back_left": {"pwm": 13, "dir": 14},
-        "back_right": {"pwm": 4, "dir": 5},
-        "extra_motor": {"pwm": 23, "dir": 25},
-    },
-    "TWENTYONE": {
-        "front_left": {"pwm": 17, "dir": 16},
-        "front_right": {"pwm": 14, "dir": 13},
-        "back_left": {"pwm": 25, "dir": 23},
-        "back_right": {"pwm": 19, "dir": 18},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "TWENTYTWO": {
-        "front_left": {"pwm": 18, "dir": 19},
-        "front_right": {"pwm": 17, "dir": 16},
-        "back_left": {"pwm": 13, "dir": 14},
-        "back_right": {"pwm": 25, "dir": 23},
-        "extra_motor": {"pwm": 4, "dir": 5},
-    },
-    "TWENTYTHREE": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "TWENTYFOUR": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 17, "dir": 16},
-        "back_left": {"pwm": 14, "dir": 13},
-        "back_right": {"pwm": 19, "dir": 18},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "TWENTYFIVE": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "TWENTYSIX": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "TWENTYSEVEN": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "TWENTYEIGHT": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "TWENTYNINE": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
-    "THIRTY": {
-        "front_left": {"pwm": 25, "dir": 23},
-        "front_right": {"pwm": 19, "dir": 18},
-        "back_left": {"pwm": 17, "dir": 16},
-        "back_right": {"pwm": 14, "dir": 13},
-        "extra_motor": {"pwm": 5, "dir": 4},
-    },
+    "ONE":         "4,5, 13,14, 18,19, 17,16, 25,23",
+    "TWO":         "18,19, 23,25, 16,17, 13,14, 4,5",
+    "THREE":       "25,23, 18,19, 17,16, 13,14, 4,5",
+    "FOUR":        "25,23, 18,19, 17,16, 13,14, 4,5",
+    "FIVE":        "23,25, 18,19, 16,17, 13,14, 4,5",
+    "SIX":         "23,25, 19,18, 16,17, 14,13, 4,5",
+    "SEVEN":       "25,23, 18,19, 17,16, 13,14, 4,5",
+    "EIGHT":       "25,23, 18,19, 17,16, 13,14, 4,5",
+    "NINE":        "23,25, 18,19, 16,17, 13,14, 4,5",
+    "TEN":         "25,23, 18,19, 17,16, 13,14, 4,5",
+    "ELEVEN":      "25,23, 19,18, 17,16, 14,13, 5,4",
+    "TWELVE":      "25,23, 18,19, 17,16, 13,14, 4,5",
+    "THIRTEEN":    "14,13, 5,4, 19,18, 17,16, 25,23",
+    "FOURTEEN":    "5,4, 14,13, 18,19, 16,17, 25,23",
+    "FIFTEEN":     "19,18, 17,16, 13,14, 4,5, 25,13",
+    "SIXTEEN":     "5,4, 19,18, 17,16, 14,13, 23,25",
+    "SEVENTEEN":   "18,19, 23,25, 13,14, 17,16, 5,4",
+    "EIGHTEEN":    "14,13, 5,4, 18,19, 16,17, 23,25",
+    "NINETEEN":    "18,19, 23,25, 13,14, 16,17, 4,5",
+    "TWENTY":      "18,19, 16,17, 13,14, 4,5, 23,25",
+    "TWENTYONE":   "17,16, 14,13, 25,23, 19,18, 4,5",
+    "TWENTYTWO":   "18,19, 17,16, 13,14, 25,23, 4,5",
+    "TWENTYTHREE": "25,23, 19,18, 17,16, 14,13, 5,4",
+    "TWENTYFOUR":  "25,23, 17,16, 14,13, 19,18, 5,4",
+    "TWENTYFIVE":  "25,23, 19,18, 17,16, 14,13, 5,4",
+    "TWENTYSIX":   "25,23, 19,18, 17,16, 14,13, 5,4",
+    "TWENTYSEVEN": "25,23, 19,18, 17,16, 14,13, 5,4",
+    "TWENTYEIGHT": "25,23, 19,18, 17,16, 14,13, 5,4",
+    "TWENTYNINE":  "25,23, 19,18, 17,16, 14,13, 5,4",
+    "THIRTY":      "25,23, 18,19, 17,16, 13,14, 4,5",
 }
+_MOTOR_NAMES = ("front_left", "front_right", "back_left", "back_right", "extra_motor")
 
 
 # ---------------- Global Motors ----------------
@@ -503,10 +233,11 @@ def set_motor_config(config_id):
     _reset_all_pwm_and_dir()
 
     motors = {}
-    for name, pin in motor_configs[config_id].items():
+    pins = [int(p) for p in motor_configs[config_id].split(",")]
+    for i, name in enumerate(_MOTOR_NAMES):
         motors[name] = {
-            "pwm": PWM(Pin(pin["pwm"]), freq=50),
-            "dir": Pin(pin["dir"], Pin.OUT)
+            "pwm": PWM(Pin(pins[2 * i]), freq=50),
+            "dir": Pin(pins[2 * i + 1], Pin.OUT)
         }
         motors[name]["pwm"].duty(0)
         motors[name]["dir"].value(0)
@@ -532,12 +263,12 @@ def stop_all():
     for m in motors:
         try:
             motors[m]["pwm"].duty(0)
-        except:
+        except Exception:
             pass
 
         try:
             motors[m]["dir"].value(0)
-        except:
+        except Exception:
             pass
 
 
@@ -549,15 +280,22 @@ buzzer_pin = Pin(15, Pin.OUT)
 
 
 def wait_for_start():
-    global _running, _stop_active
+    global _running, _stop_active, _oled_last
 
     print("Waiting for START button (D34)...")
 
-    while button_start.value() == 0:
-        time.sleep_ms(20)
+    start_keyboard()            # web page is reachable while waiting
+    try:
+        while button_start.value() == 0:
+            _poll_web()
+            time.sleep_ms(10)
+    except KeyboardInterrupt:   # Thonny STOP
+        _shutdown_web()
+        raise
 
     _stop_active = False
     _running = True
+    _oled_last = None
 
     print("START pressed!")
 
@@ -927,6 +665,16 @@ def stop_drive(motion=None):
     stop_all()
     _current_motion = None
 
+def extra_motor(speed=100, direction=1):
+    """Run only the extra motor (wheels stop). direction 1 = up, 0 = down."""
+    check_stop()
+    if not _running:
+        stop_all(); return
+    for m in ["front_left","front_right","back_left","back_right"]:
+        motors[m]["pwm"].duty(0)
+    motors["extra_motor"]["dir"].value(direction)
+    motors["extra_motor"]["pwm"].duty(_calc_duty(speed))
+
 def sensor_1():
     if _adc1.read() > THRESHOLD:
         return 1 
@@ -945,188 +693,536 @@ def sensor_3():
     else:
         return 0
 
+
 # ================================================================
-# ADD THIS BLOCK TO THE BOTTOM OF motor_library.py
+# WIRELESS KEYBOARD CONTROL
+# ----------------------------------------------------------------
+# The ESP32 hosts a hotspot + a small web page. Open the page on a
+# laptop / phone connected to the hotspot and press keys.
+#
+#   main.py:
+#       wait_for_start()
+#       while True:
+#           if key("A"):
+#               FW(speed=100)
+#           else:
+#               stop_drive()
+#
+# Key names (use with key("...")):
+#   Letters  : "A" .. "Z"           Numbers : "0" .. "9"
+#   Top row  : "ESC" "F1" .. "F12" "PRTSC" "INS" "DEL"
+#   Arrows   : "UP" "DOWN" "LEFT" "RIGHT"
+#   Diagonals: "UPLEFT" "UPRIGHT" "DOWNLEFT" "DOWNRIGHT"
+#              (gamepad diagonal buttons, or holding UP + LEFT etc.)
+#   Extra motor (gamepad top bar): "EXTRAUP" "EXTRADOWN"
+#   Edit     : "BACKSPACE" "TAB" "CAPSLOCK" "ENTER" "SPACE"
+#   Modifiers: "SHIFT" "CTRL" "ALT" "WIN" "FN" (FN: on-screen key only)
+#   Nav      : "HOME" "END" "PGUP" "PGDN"
+#   Symbols  : "BACKQUOTE" (`)  "MINUS" (-)  "EQUAL" (=)
+#              "LBRACKET" ([)  "RBRACKET" (])  "BACKSLASH" (\)
+#              "SEMICOLON" (;)  "QUOTE" (')  "COMMA" (,)
+#              "PERIOD" (.)  "SLASH" (/)
+#   get_key() gives "NONE" when no key is pressed.
+# When all keys are released the robot stops automatically.
+#
+# The page keeps ONE WebSocket connection open (no new connection
+# per key), so WiFi / WebREPL stay stable.
 # ================================================================
 
 import network
-import uasyncio as asyncio
-import ujson
+import socket
+import sys
+import errno
+import gc
+import hashlib
+import binascii
 
-# -------- WiFi AP CONFIG (fill these in) --------
-AP_SSID     = "YOUR_SSID_HERE"       # e.g. "RFL_BOT"
-AP_PASSWORD = "YOUR_PASSWORD_HERE"   # e.g. "12345678"
-WS_PORT     = 8765
-# ------------------------------------------------
+# -------- WiFi AP CONFIG (same as boot.py) --------
+AP_SSID     = "ERC_Classroom"
+AP_PASSWORD = "12345678"
+WEB_PORT    = 80       # robot control page (browser)
+WEBREPL_PORT = 8266     # Thonny wireless link (started in boot.py)
+KEY_TIMEOUT_MS = 1000   # stop if the browser goes silent this long
+# --------------------------------------------------
+
 
 def start_ap():
     ap = network.WLAN(network.AP_IF)
-    ap.active(True)
-    ap.config(essid=AP_SSID, password=AP_PASSWORD, authmode=3)
-    while not ap.active():
-        time.sleep(0.1)
+    if not ap.active():          # boot.py may already have started it
+        ap.active(True)
+        ap.config(essid=AP_SSID, password=AP_PASSWORD,
+                  authmode=network.AUTH_WPA_WPA2_PSK)
+        while not ap.active():
+            time.sleep(0.1)
     ip = ap.ifconfig()[0]
-    print("AP ready  SSID:", AP_SSID, "  IP:", ip)
-    oled_status("WiFi AP Ready", AP_SSID, ip, "Port:" + str(WS_PORT))
     return ip
 
 
-# -------- KEY → MOTION MAP --------
-_KEY_MAP = {
-    "w":      FW,
-    "s":      BW,
-    "a":      L,
-    "d":      R,
-    "q":      CCW,
-    "e":      CW,
-    "z":      FL,
-    "x":      FR,
-    "c":      BL,
-    "v":      BR,
-}
-
-def _handle_command(cmd):
-    """
-    cmd is a dict:
-      { "type": "keydown", "key": "w" }
-      { "type": "keyup" }
-      { "type": "speed", "value": 75 }
-    """
-    global _ws_speed
-    t = cmd.get("type")
-
-    if t == "speed":
-        _ws_speed = int(cmd.get("value", 100))
-        return
-
-    if t == "keyup":
-        stop_all()
-        return
-
-    if t == "keydown":
-        key = cmd.get("key", "").lower()
-        if key == " " or key == "stop":
-            stop_all()
-            return
-        fn = _KEY_MAP.get(key)
-        if fn:
-            fn(speed=_ws_speed)
-        return
-
-_ws_speed = 100   # default speed, adjustable from UI
+# The control page and logo are stored as comment lines at the very
+# end of this file (#@P: / #@L:). Comments use no memory when the
+# library loads; they are read from the file only when a browser asks.
 
 
-# -------- WEBSOCKET SERVER --------
-# Minimal WebSocket handshake + frame parser for MicroPython
+def _valid_key(k):
+    return 0 < len(k) <= 10 and all(c.isalpha() or c.isdigit() for c in k)
 
-import ubinascii, uhashlib
 
-def _ws_handshake(reader, writer):
-    # Read HTTP upgrade request
-    key = None
-    while True:
-        line = yield from reader.readline()
-        line = line.decode()
-        if line.startswith("Sec-WebSocket-Key"):
-            key = line.split(": ")[1].strip()
-        if line == "\r\n":
+def _read_request(conn):
+    data = b""
+    while b"\r\n\r\n" not in data and len(data) < 2048:
+        chunk = conn.recv(512)
+        if not chunk:
             break
-
-    # Send 101 Switching Protocols
-    magic  = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-    accept = ubinascii.b2a_base64(
-        uhashlib.sha1((key + magic).encode()).digest()
-    ).decode().strip()
-
-    response = (
-        "HTTP/1.1 101 Switching Protocols\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Accept: {}\r\n\r\n"
-    ).format(accept)
-    writer.write(response.encode())
-    yield from writer.drain()
+        data += chunk
+    return data
 
 
-async def _ws_read_frame(reader):
-    header = await reader.readexactly(2)
-    b1, b2 = header[0], header[1]
-    masked = (b2 & 0x80) != 0
-    length = b2 & 0x7F
-
-    if length == 126:
-        data = await reader.readexactly(2)
-        length = (data[0] << 8) | data[1]
-    elif length == 127:
-        data = await reader.readexactly(8)
-        length = int.from_bytes(data, "big")
-
-    mask = None
-    if masked:
-        mask = await reader.readexactly(4)
-
-    payload = await reader.readexactly(length)
-
-    if masked:
-        payload = bytes(payload[i] ^ mask[i % 4] for i in range(length))
-
-    return payload.decode("utf-8")
+try:
+    _LIB_FILE = __file__
+except NameError:
+    _LIB_FILE = "motor_library.py"
+_asset_pos = 0      # where the data lines start in this file (found once)
 
 
-async def _ws_client_handler(reader, writer):
-    # Handshake
-    key = None
-    headers = {}
-    while True:
-        line = await reader.readline()
-        line = line.decode("utf-8", "ignore")
-        if line == "\r\n":
+def _send_asset(conn, tag, header):
+    """Send the page / logo stored as #@P: / #@L: lines at the end of this file."""
+    global _asset_pos
+    conn.sendall(header)
+    out = bytearray()
+    with open(_LIB_FILE, "rb") as f:
+        f.seek(_asset_pos)
+        while True:
+            pos = f.tell()
+            line = f.readline()
+            if not line:
+                break
+            if line.startswith(b"#@"):
+                if not _asset_pos:
+                    _asset_pos = pos
+                if line.startswith(tag):
+                    out += binascii.a2b_base64(line[4:].strip())
+                    if len(out) >= 1024:
+                        conn.sendall(out)
+                        out = bytearray()
+    if out:
+        conn.sendall(out)
+
+
+def _serve(conn):
+    """
+    Answer one new connection.
+    Returns the socket if it became the WebSocket client, else None.
+    """
+    try:
+        conn.settimeout(0.5)
+        req = _read_request(conn)
+        lines = req.split(b"\r\n")
+        parts = lines[0].split(b" ")
+        path = parts[1].decode() if len(parts) > 1 else "/"
+
+        if path == "/ws":
+            ws_key = None
+            for line in lines[1:]:
+                if line.lower().startswith(b"sec-websocket-key:"):
+                    ws_key = line.split(b":", 1)[1].strip()
+            if ws_key:
+                accept = binascii.b2a_base64(hashlib.sha1(
+                    ws_key + b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest()).strip()
+                conn.sendall(b"HTTP/1.1 101 Switching Protocols\r\n"
+                             b"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+                             b"Sec-WebSocket-Accept: " + accept + b"\r\n\r\n")
+                conn.setblocking(False)
+                return conn
+            conn.sendall(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
+        elif path == "/":
+            _send_asset(conn, b"#@P:",
+                      b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n"
+                      b"Content-Encoding: gzip\r\nCache-Control: no-cache\r\n"
+                      b"Connection: close\r\n\r\n")
+        elif path == "/logo.png":
+            _send_asset(conn, b"#@L:",
+                      b"HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n"
+                      b"Cache-Control: max-age=86400\r\nConnection: close\r\n\r\n")
+        else:
+            conn.sendall(b"HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n")
+    except OSError:
+        pass
+    conn.close()
+    return None
+
+
+# -------- server state --------
+_srv = None
+_ip = ""
+_client = None      # the one open WebSocket
+_buf = b""
+_key = "NONE"
+_last_seen = 0
+_last_poll = 0
+_tap = None         # last newly pressed key, used by tapped()
+POLL_MS = 10        # check the browser at most this often
+
+
+def start_keyboard():
+    """Start the hotspot + web page (safe to call many times)."""
+    global _srv, _ip
+    if _srv:
+        return
+    _ip = start_ap()
+
+    # After Thonny Stop/Run the old network sockets can take a few
+    # seconds to be freed - keep retrying instead of crashing.
+    for attempt in range(20):
+        s = None
+        try:
+            gc.collect()                  # frees sockets nobody uses
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("0.0.0.0", WEB_PORT))
+            s.listen(2)
+            s.settimeout(0)               # never wait inside accept()
+            _srv = s
             break
-        if ":" in line:
-            k, v = line.split(":", 1)
-            headers[k.strip()] = v.strip()
+        except OSError as e:
+            if s:
+                s.close()
+            if attempt == 0:
+                print("Network busy (" + str(e) + ") - waiting for it to free up...")
+            time.sleep(0.5)
+    else:
+        raise OSError("Could not start the control page. "
+                      "Press the RESET (EN) button on the ESP32 and try again.")
 
-    key = headers.get("Sec-WebSocket-Key", "")
-    magic  = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-    accept = ubinascii.b2a_base64(
-        uhashlib.sha1((key + magic).encode()).digest()
-    ).decode().strip()
+    print("=" * 46)
+    print(" WiFi          :", AP_SSID, "/", AP_PASSWORD)
+    print(" Thonny link   : ws://" + _ip + ":" + str(WEBREPL_PORT))
+    print(" Robot control : http://" + _ip)
+    print("=" * 46)
 
-    response = (
-        "HTTP/1.1 101 Switching Protocols\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Accept: {}\r\n\r\n"
-    ).format(accept)
-    writer.write(response.encode())
-    await writer.drain()
-    print("WebSocket client connected")
+
+def _drop_client():
+    global _client, _buf
+    if _client:
+        try:
+            _client.close()
+        except OSError:
+            pass
+    _client = None
+    _buf = b""
+
+
+def _shutdown_web():
+    """
+    Close the control page connection + server. Called when Thonny's
+    STOP interrupts the program, so the phone stops sending data into a
+    connection nobody reads (that would block WebREPL until a reset).
+    """
+    global _srv
+    stop_all()
+    _drop_client()
+    if _srv:
+        try:
+            _srv.close()
+        except OSError:
+            pass
+    _srv = None
+
+
+_ACK = bytes([0x81, 1, 0x6B])   # "k": tiny reply so the page knows we are alive
+_KICK = bytes([0x81, 1, 0x78])  # "x": another device took control
+
+
+def _read_ws():
+    """Read whatever the browser sent. Returns the newest key, or None."""
+    global _buf
+    try:
+        data = _client.recv(128)
+    except OSError as e:
+        if e.args[0] == errno.EAGAIN:
+            data = None                   # nothing new yet
+        else:
+            _drop_client()
+            return "NONE"
+    if data == b"":                       # browser closed the tab
+        _drop_client()
+        return "NONE"
+    if data:
+        _buf += data
+
+    key = None
+    while len(_buf) >= 2:
+        opcode = _buf[0] & 0x0F
+        length = _buf[1] & 0x7F
+        pos = 2
+        if length == 126:
+            if len(_buf) < 4:
+                break
+            length = (_buf[2] << 8) | _buf[3]
+            pos = 4
+        elif length == 127:               # never sent by our page
+            _drop_client()
+            return "NONE"
+        if len(_buf) < pos + 4 + length:
+            break                         # frame not complete yet
+        mask = _buf[pos:pos + 4]
+        payload = bytes(_buf[pos + 4 + i] ^ mask[i & 3] for i in range(length))
+        _buf = _buf[pos + 4 + length:]
+
+        if opcode == 8:                   # close
+            _drop_client()
+            return "NONE"
+        if opcode == 1:                   # text = key name
+            k = payload.decode().upper()
+            if _valid_key(k):
+                key = k
+    return key
+
+
+def _poll_web():
+    """Handle the browser (new page loads + key messages) and the safety stop."""
+    global _client, _key, _last_seen, _tap
+    if not _srv:
+        return
 
     try:
-        while True:
-            text = await _ws_read_frame(reader)
-            try:
-                cmd = ujson.loads(text)
-                _handle_command(cmd)
-            except Exception as e:
-                print("Bad command:", e)
+        conn, _ = _srv.accept()
+    except OSError:
+        conn = None
+    if conn:
+        ws = _serve(conn)
+        if ws:
+            if _client:                   # only one controller at a time:
+                try:                      # tell the old page it was replaced
+                    _client.send(_KICK)
+                except OSError:
+                    pass
+            _drop_client()
+            _client = ws
+            _last_seen = time.ticks_ms()
+            print("Controller connected")
+
+    if _client:
+        k = _read_ws()
+        if k is not None:
+            _last_seen = time.ticks_ms()
+            if _client:
+                try:
+                    _client.send(_ACK)
+                except OSError:
+                    pass
+            if k != _key:
+                _key = k
+                if k == "NONE":
+                    stop_drive()          # all keys released -> stop
+                else:
+                    _tap = k              # remembered for tapped()
+
+    if _key != "NONE" and \
+            time.ticks_diff(time.ticks_ms(), _last_seen) > KEY_TIMEOUT_MS:
+        print("Controller silent - stopping")
+        stop_drive()
+        _key = "NONE"
+
+
+def get_key():
+    """
+    Returns the key held down in the browser right now,
+    e.g. "A", "UP", "SPACE" - or "NONE" if no key is pressed.
+    """
+    try:
+        return _get_key()
+    except KeyboardInterrupt:           # Thonny STOP
+        _shutdown_web()
+        raise
+
+
+def _get_key():
+    global _running, _stop_active, _oled_last, _last_poll
+
+    start_keyboard()
+
+    if button_stop.value() == 0:
+        check_stop()                      # stops motors, needs START again
+
+    if not _running and button_start.value() == 1:
+        _running = True
+        _stop_active = False
+        _oled_last = None
+        print("START pressed - resumed")
+
+    now = time.ticks_ms()
+    if time.ticks_diff(now, _last_poll) >= POLL_MS:
+        _last_poll = now
+        _poll_web()
+        # Short pause: the ESP32 only handles WebREPL (Thonny's STOP /
+        # Ctrl-C and new Thonny connections) while the program sleeps.
+        time.sleep_ms(1)
+
+    if not _running:
+        return "NONE"
+    return _key
+
+
+def key(*names):
+    """
+    True while one of these keys is held in the browser.
+        if key("A"):            FW(speed=100)
+        if key("UP", "W"):      FW(speed=100)
+    """
+    return get_key() in names
+
+
+def tapped(*names):
+    """
+    True only ONCE each time one of these keys is pressed
+    (holding it does not repeat). Good for on/off buttons:
+        if tapped("L"):         led_toggle()
+    """
+    global _tap
+    get_key()
+    if _running and _tap in names:
+        _tap = None
+        return True
+    return False
+
+
+def horn(on):
+    """Buzzer on/off.  horn(key("H")) = beep while H is held."""
+    buzzer_pin.value(1 if on else 0)
+
+
+def led_toggle():
+    led_warning.value(0 if led_warning.value() else 1)
+
+
+def _call_key(on_key, key):
+    try:
+        on_key(key)
     except Exception as e:
-        print("Client disconnected:", e)
+        stop_drive()
+        print("Error in on_key(" + key + "):")
+        sys.print_exception(e)
+
+
+def start_keyboard_control(on_key):
+    """
+    Alternative style: on_key(key) is called once per new key press.
+    Runs forever.
+    """
+    global _running, _stop_active
+    _running = True
+    _stop_active = False
+    last = "NONE"
+    try:
+        while True:
+            k = get_key()
+            if k != last:
+                last = k
+                if k != "NONE":
+                    _call_key(on_key, k)
+    finally:
         stop_all()
 
 
-async def _run_server():
-    server = await asyncio.start_server(_ws_client_handler, "0.0.0.0", WS_PORT)
-    print("WebSocket server listening on port", WS_PORT)
-    await server.wait_closed()
+# ================================================================
+# BUILT-IN WEB PAGE + LOGO DATA  (do not edit these lines)
+# ================================================================
+#@P:H4sIAAAAAAAC/8U7aXfaSpbf+RUVuxOJZyEkAV7A8huMceKJt9hOp1973GeEVEANQtKThLGb+L/3vVUlIRZv6Zkz4QSpruqudbcq5P0PRxedmz8uu2SYjv2D
+#@P:fflNHe9gf0xTh7hDJ05oam9M0n5ld+OgJMCBM6b2xj2j0yiM0w3ihkFKA5g2ZV46tD16z1xa4QONBSxljl9JXMentqlNEhrzgdODcRBqGZlKn6W2G97TeInP
+#@P:OOwxH8jRXsWJoorrRIha4PpIE0RJWerTg+5Vh1yFvTDdrwrAfpI+wqXUjMMwnVUqjus2N7cN12kYrUpl4IdTGPap0XBhOGTNzT2nb+w6MOgNmptGDz9PJTSN
+#@P:1gu9x9mQssEwbZqG8fGpxCF9EKTSd8bMf2y2Y1BWS5wgqYCirN/qOe5oEIeTwGveO7GKVMstN/TDuLlJKW2l9CGtOD4bBE0XtKFxa+zEAxY0jZYwFfWpmzaD
+#@P:MKAttMGIpZVnH6ThxB2ChXw/nIhHQkQ9crwZmraP6g6Z59GgJSY7bsrCQM69FY/uZh5LIt955OAPbIzr4wTpU0kPRzMpfN2tP+k9oJspU6/Dc1w3f1ZQ2mcB
+#@P:deLKIHY8Bvqp5rbh0YG2WXPwo22aLn5Io/FR27Qc/JRbvTD2aNw0oweShD7zyGa9XpfQChKaJGD/6AFAD5Vk6HigFAvAUYlBEMkgm41GQzNIDQbb8H/TMIyn
+#@P:Uqn6G6nk/8jn9ln3sn1E/nrS/VGE/1YtbaK9ojBh3DZ99kC9FmcAq5KZZhAzr4VflZSOAZLSShxOk6YzSUNi9uPWwImawLwFtDwWDPg9F5j9E4dSHYCA2dIw
+#@P:ym3e9+lDjiy9zfWdcaTW69GDZu7cD7UdK3ooCzzCxoOiU7YQX66nnvZmfGi2xiwQEVlQgXPCr4rHYiocAVZzMg5a3CMrDFRLMr/8n0mSsv5jRcZdBhbLL3wb
+#@P:YqvcKhEeEKAmlXLvodj69v1UM2FFwP0ncQI4Ucg4hTWOCIKT3myZjgkW0WpAaKhZ20gInauS6S6wkjF4/yyMHJelj019G6As6IfSDHr9/84Qr2gtBSEeu2/6
+#@P:TpJW3CHzvVUdcY3rqGGdm6pg3SEri3QhXd4AR98F7xZPMZMhE2et5WCe1gCqNQOp8sdTYbde6HsYuA4LZi/4tjAHxF0/JvoOfIFqBSdHq8qFgEiDfBNQXxeG
+#@P:mWUBAArx+XCFKeIh0T2MtTmYYxYTSEwj6qSAX1lOJfUGzyRmDz9gC/SOTcuyeMibGCFrMkmtVlvOJDATnLYYpot2WKPis4Hs0346W5MV0GzwH2bESGH2vHHF
+#@P:LGm6NZRq+ZweGywmjfcEbZDCgoPY6WNEm+gpi/qtxORS0AJ7YO3ORCQBqrpnuX9ONfwelrO0tQJftHwDstUvKlAiRRcBctBi5I7hstj1KXFSUmt8JDUDSkvD
+#@P:wQ84yzZ+yHbjY3ld9cBPAwuG5eJHK8J3EA6FSBNT0G1kYdHTmElL1EElJ4kgh4CSYDzIvCsdAM+Srs+iSuQAShT6j4MwUMEaZPujtrf9kezuftTq/AKxynxQ
+#@P:uOnFYSSlVVGa+mLgY+TzSHo+hGUkqTUN3KdcXRg9F8de7//Vw3qkYFp0psYuOhN+D58zoSVMWAcTbheue3Ct1efXujAxXNB0CRbgwkJt7vZMwzSyRq3f76/k
+#@P:zJV8jx2JZumYu01enUqkEB0GjwJjJTqK8F+OhVVLgNMTQ9vh39gV8CjgNwDjcBxotezG4HADp6E9YmiV31gMzOerQPzL3pMRXGkuXjJ6A43+BreKX6+Q2OkG
+#@P:M5mtlmrwvB8uZhCMSXMpKDUEWlii40HPUU3T1CyrDrlQ0xvlhbYaUjkw1MDjdS52qopOujwrsFhtxgMisvALmWxuOyGNtdIwIBWMspU8hf3GM9kHzb6cfpDO
+#@P:ShxRw9w1d3lrxhWMe9yw61OiCLZsy7UJTgjO9lwfXsz/aF1Dw4++Z83jiC//v9vWoStiPLf+WWGBB03kXsEJLQObFinpgldtG2vc96n0H2MKtYqoYYyVyuEi
+#@P:4YLGDktxscVejWS6F8PnCf0kDfJ2ihcgFKAgj7k2aJYjYGkj9LX7x+FF+2r9TmjUu1/gCNr64SCcLWxMdjAKzTpvdXmDmcnd80N3lO1oMTr47ghyw9CaSSg2
+#@P:a8aqzD5NU9zlYiMPrAXnUcHAddRc0uDuaBTTT313yRDrmmdzJRhA3dna1g44PchtA+TLZdaoVdEhN80GftY1mpktdxe3ryJgTd568F0wT8LTtyRhWci367yS
+#@P:A96IPmbGtZa3kLhv0up8V9IQHXJRat5Jr2mahUjL3Rtvm1/N0Dt8G2Q28t3fL1e55eWrZ4l1b1uzDEvbhfDfKS9a1RLHAbBkr+46W8sHJNMhyMU9kMKEaexE
+#@P:uCgG4QZetKrBN6YW6FjbFuUD5rwx0y24JRcEskGQ9MN43OR3uNp/qCanu18Vx1n7VXFMhxnjoFTah10lYZ69Ae61cVAifAyyJYm9ASkZQWSfjQckiV17o4oR
+#@P:rEfBYIM4fmpvbBDgGsdhDJOHLNE5C12uk62gTIogUSDLN7O8SG0cFOFJCq05CAHLF2DODQa6ru9XYcZBLuXI2jioSBj/XqIN+3hBmXhO6lRA5O4DmOI7KLLf
+#@P:O/i0+WA1Dq3WfrV3wOHvoXEUToMClc4bqRCnNyf0lT62OY02Ir8L75DjHb4br8PxOu/GO+J4R6/ibfB16Se5abaPt7lpjie+/wbMNPzay3Fr1i7HBf5Jhptf
+#@P:CyTwzGHFr/gBAMF9NH+08AzapLl2bfDYKXeJwgxshwDCciljBsMqO1jytlfISi95hTDhgYL3WbyKsg3NJB5yltdyXmtMobTIdKtqezKql8ErHv49OuV2e6OY
+#@P:FX6CsiDmG5jM7f6cld8k6RXmzzeL+uuSvs8ie8Yb+Mw5XGNxWM5/mG+vby4ul13uLdK+zypvknaZD/r2+4xi1n7Z+jKQfjls3qjP+8z2jD7rkwPgrIm9eEUM
+#@P:SHbf8gy4cyzK07dntFiL3t046Ob4tdZCziZvyR+xsMLr6U0u/6+mtzVR8tbEmi3Ur7Leez2xLlQarE0CNV8b8/CQ2/ZKbNoew0lMoiH0OCRhHp06ULOKKqTB
+#@P:YoWE1gVrIkncmNJgQQZ5mXdjsHnaIKKbRIGwAUMwtl8b61uxq+NT0nYdj44f39qV7Q8t8avnxeHFDelcnN9cXZxCf2gtVdsXGrOCsUZ5Z7aIvWSHNLwEWtky
+#@P:ZS09C/gvMnzXt4HGNo9r7W6LfHbGFLe1+FvvKkdsHJYMCMZlUXpQ6k8C3qCTUzUpz2KaTuKAgCkin6WqopT1sROp2STVzabcKhBOyparuZp59wRtc07n6J10
+#@P:jtiApUVK0MWTY/v2DvY5sYoDZpsttm+bVottbZWP9WiSDNVb5VjZYpr4Nu/KLY53dfHj2r4tkdtbpZu4TkQVDW8UmHGnw7K4sI071uDpZQx7lGvuYDDlMoZ7
+#@P:nKTdKidBQuMUgHAjQUcU9spICm44qbLGWRzC1uPPScgf/fcCjyNVMa1avbG9s7tnKGXkeMaCCRBUKpJo98+JA9QUW46RGN8JAaxwb+GzL+EYweIy53/j9ADK
+#@P:v029Med+qirffnSvbv74fnJxKbgfxkCSppiWAOU24ymgPGUA+K4oCjjlEGDgYo1OSzCAR5fOgH6P0GQDvMxl6ThRcgpOCY/wloh7U99ZlKt9fXT8+ct/fj0V
+#@P:Yl3TMcOtGi5CS3L/Jiy6oWxIQ2HLhusorpZu5ZJgYeKyHAVFWa6HrJ+pyu8lVlGQv/+t89fD8zMhRiccjx2YrEkRLmnMQg+GugRcS2tUszFSzcwmWXBd4Zns
+#@P:3oTt+DYqW/HA42p4C3aDPXgc+lLaThqjh0kVzyAbyAdIytqDQP/BgvmEtp+pCXdz8LV0I0VrzCdm0sIt+RxLkY7RfMeBHElZsplCGCvXqSBKo2NkWuVNSK5w
+#@P:Z+FRRk082+bP7kp3Il7Pz+xZHkVN5bDd+frt+8VNV9F4uDSVs5Pz79eKxoOlqXS/fW+fKloeHgLj+rLdAQyIg6Zy0z5UwLAFd28qp4dXMKt7A4gFf28qV3N4
+#@P:5vCS4Gn7+ouiZS7dVDrty+vTi85XJJ27bFO57p6ddC5OL84V7ZtQQArPXRXEPb/pXila7o6A8eXk+EZCpBQSVCLcCYHXxdlZW9GECzaVy+7VycURoAjxMtHm
+#@P:XgMYN1enOUhSFbASyVyoqfw4ATFxKGfwsXSgptI+veEj+ZAPr4WJpXlLRDp2U/l+CXOzZW8qRxc/ziVAGryLGs1XH0x98vkLgEROBsNcd5BgIQmDolc3CBXp
+#@P:t6mcnMOyi8QLHLqgDGa/pvLl4owb2EPzgl1EQgL0zyhVlhRwfARCHcPd8TnyEhs3lF1IJ7dHCJDCZV27UEjMyjtfAZQzS0QeloAMf7u5aiPn/OhDwrhRnlrz
+#@P:uhiMseqVCOur52e37l1Z1kg+aJXwlJSMbRfqZOoO1eo/VCiwP3lxLKu37crfjcreXfkv1XILCIwz5PGthbgAqv7jWL01Yc5P89aoWDhVT2mSAtNssgsz5W0A
+#@P:/VWhZgfQ/6F0yzKcT8bQVKj/5S0zzqr2+Na8Q7hr27YiZos0nc0To1YmwVOJh/2oZ3uhOxnDblwf0LTrU7w9fDzxVGXUU6CYYyHXoQHoOiBI3jbEWszQhkgD
+#@P:nGtOBHwIOk1JR1WgxwEiMEPnvdU5vuWmwJDEylbM0AyrtEdImFOm/iuE8cWLOd0RNEIIwi48oYBij24NXBUgpDPoBOMvN2enAARTAYS/M2eDN+AsTku0nXj0
+#@P:3OEHzrYCyS0gytaZkw51frQJk6273+r4iycqrjtRRAOvg++3qNQvP+GDUW8BHONxO8C5waG3TOZK/Tmh8eM1f7stjNu+ryq3Ygtxh6bHuavmAS7S8K5dVBYY
+#@P:w9DxvO49kD5lSUpBY1WRh8AeLwxzKuUZ1aOY4twj2ncmfqqWW2n8OEM70PRSYEHmBX+hKswVgBOv/ORyp3woz56AQJKAv3K1X+I+iQq8seX0KUj9FkzXCVxs
+#@P:9t6JzU/UH1Kw8uQ1rZFIvj5D6nvQ8mrTxMbQ1I5O2p/t2zxZzZNUITcVMtJdIc+4k1iVeeYDktV9GgzSYRaQ5xfnXUWmm8DmE7AzD8ZlDd+ZsoPbQGJUTJla
+#@P:bnnCl2leJneZ0e90/ovdRV9F5PKBbeRRNLGD/CESwIeaVwRyghzsF8GcAQfHRbBgiHAMAhBr8sH2Pn3yP9ix1E2d/I6MZEEqb6n+74JYVn9w2Z7yHIgSF3Jg
+#@P:AnvVSaKGkAdeCBQIVtjLrEQHbHkSHVe+I1+ZDUe/K3IbSD0QIAhTMh+3kmICgW2jsqUiRjiCqbCFVMrZRgiFbLsjMMaIQevi2X3HT2hxuQVRNYvOqR3QKflB
+#@P:e9chtjqqMk2a1aqyBRtG/luoPgyTdEupThMwB7jbFF+i0MMghMxhF7w9Y3wE6U8PwimEqbRQGk8oDCDRgBNL7DEEJJReu+jyayiIhaM8e2DFeFDKM6kXUm1J
+#@P:9+cJAXN3COFWDHw8/fhfWBzFgeUY0piI96hJGoYj/rIz9E+kQnh6IU7wSHqTNIW9ycpy4RLBCmXac0GLxgMlQRXbngJnYTS+bGi19IaNaTiBuiwWTjMbhjEn
+#@P:JY4jCqTmZoAZBfQlbjrUKe/xGs9bgK9RnqNpdQMYQK4puDpfO5kjpsnPn9OkgP/Btk0ZUcCy+hsUnB54bxSHg9gZEzx9jahHYBkHOrkZghqPBA9jy01Ym0BJ
+#@P:yYjSiPNgwYBANg0JS/GXbmQ3d4aK9I+DGso3E747TXIfWDTcOo8AH3taY1CL6ysUAI8B3bi+PC8WDyqSIYohw2Zk8+daahdy5u/Q+sN23WPOwMaMnCejkUxD
+#@P:zzcx4IdFj0tbz0+1VuaWyPM1eG0FJllHgpVIT8PBwKeqgrtqrk0mtoti//ypokKfPvGGFJxlVBa1aG6ZrL4KDxEBmgeqSEB52nnic5bY7MOCchA/qnHB74ci
+#@P:g4ikUWA1L6ozcdSzRAmbS8bLCn+Ax0kuVZlmrtLMLbxalqFFW21Esm6GN79Ud0OPcnYfuGGyCFjTruAcqouXAsrFXuRlCRaakX+HP7c477iLp1ifPq1ZhEy6
+#@P:1vrMUWhpMA8Vomax2VleLsy2YkXwnG5xIUpTEAFb1BUb9PxJrGhzEi9b7J4lrMd8lj66QycY0CXMYjZLz8B2sDeZvRCREVZVXZwU2+oYkpwAvRjFvfsijr0O
+#@P:h79QNK8OY3yLAnIVllv/GgoTVEVsbE9SOlYV6CtRVEUbF3NYacGsheDoQx4Uh+B5nvLmXXx2I0XW+rYHTglVMUmPc8SfPz1d/OnK1fIj4Ucf+vNcj4JfxuGY
+#@P:JejeSejfU7Wv4x+7qF4ZktQQBCl4j6jmgpheeN3q06dVmI4H1uVn4KriO4EnzmvLujBMgQ9U2vXQuQkL0b+8iPi7OVDFKg0JrFhaM8fhW86n1kskLrn3vESD
+#@P:O8ZLRPrJAoX5KryAYT2Dgp6QOPeQjfN2SQwX3G6w7HYLTpdJzhGhKPA9/xm+O6cqqtwFNd0Q/zytzI/v4TFNfueKNrnJIA7yMtBCeieIc+/4KqYCrcbbjv2q
+#@P:/KVhv8rfpNmv8r+BK/0LZ85vSho3AAA=
+#@L:iVBORw0KGgoAAAANSUhEUgAAAPAAAAC1BAMAAACT7m9+AAAAHlBMVEUAAABey05kplx5+XhmxlZgr1NrxlwA/wAAAAAAAADdkuDBAAAACHRSTlMA+xYEpVxk
+#@L:AZgU2xIAAA2YSURBVHja7ZzJc9s6EoexkOYVYCidIdqOr3zSzPOV9Dg+Uy47c5VTcc6suGr87093g6vEBZTl6PJQiayF4sdubI0fmmK+hnJvS/X3/j6yf3LG
+#@L:EtZbAsPY9X1TtI7wQUcCP7261xzfzVrfkHD8gwmK6vWFHivLZICcsOun3m8s8MOX6pVqvlFc4XXlzA2s9Y9ecsKeBo4n8LZ6FTZfIdfqyLiC9R0rDrniRY+B
+#@L:eQ0O6u/w6nSuYJ3LA7Dgw5XTb7Fk1Vs3RdsDYyXad7ZkL8NHD7ja1G+lzmAdim6DZmasOcpecJHtv+UA1rnpkEe/sugFi4tOXbiCOyZLlo2CRadxVV/yWjXn
+#@L:DtZti5OV/hBYzwG3eoUUehq8OhxADqxwAkfOBu+Bww+CtUnqJq31B11tihngtL7yq6PArVat5tQxdRLr6WziSOrHB2AmOlfmDtblgC0nD++3mDV9cJ7FeldW
+#@L:8upIsKm/mFfNxTBhhIlNzGIoBh7xHxMi/nlYyUl3dkh/HZS8f3aqXRUxh9JqSKE89PTCDHyvz9Vsu99MB4u8ZNtOm4Ghvm3wA2Pry81+SVh/P2Z+ZkfqwsHi
+#@L:jb83hDSjP85/8nbI4j5wguSleXdxNTNZt1kX2Wh8MOpqaHR/06NTWXWHdtlqV7KYB2ZvNLW5FXmxN2g2rjeGzQSzt82auYLfOsFA0YBHXdZbxzNLZwRpta3c
+#@L:sNkWzypZZ+iqX0WjlXUI3my6UflkKTrgZqQft+TUFreCj10yC+zft4uXzwS3JtWbWWC5t2pw4Ip2a2rCiImRfh8sLnrn2LHu9L92pNSM1Mt54H2LpyeKVqjU
+#@L:Wndp/eVjYAdXb9vuac6ngg+5Op1RxVFnbko/19VFE6/srcXSidYxD1zE3bJpGay/yLbCMDH2HLjaH6nj3z2Oztq6QAc84er9ScL3OiNIawAJwITY//Xreyts
+#@L:e832oswGfGfYiWanpAyJhhdPRRs8Uvy+tVMQvAfvdSna3JxPrg/cwEOLtv5xYlA8alexG5iavyvYXDmtFk8OLiYlJzvvu4Nd5+PtpCLw/ingf03LPskngIMi
+#@L:c1wdHwMem00uHA0+qnGNgJPttMEFO72rA+Fq8IwBxAnsTerGlbtOC57SrVqrpNO6ekrGiUy9aHADu1osprhNLHpai8dVH7+90HGuY+YCHmlb7AGWLa0gpwar
+#@L:EbCQjuDuPLzbnzDbUd146CNEqV45grvuizrrqaQ77jjHXE7g/UYtGp1iX6D5XLB+ZEOyinN4y1az69iGOeI8YP1tQBVqwCn7FDCIlCI5jcVqHhjl0dvTuFrO
+#@L:A+NIaU4BXswFY4e+PQF4KeaCceN4czSYOehhw0uXgw7tDG4pGCaZDwabu2R3sO+w+B9brD0MThKJq4QRFseAQVaSx4BbAeRwJVfgqDcEejAyOaZxZdOVzOs9
+#@L:4l7y0jQQd3ArVknlBBg0s58DHdrMB6/0pPpYgVUxkNsB5GQuuL1NlIoJMEYt/eRH2seY1ar9tnzyNgWG010NDCViHrizrb7sRIy9YBCd/s4GJZA5rboT2DxM
+#@L:Wow2X2QD8fU8cGdhFP2YBMOA4Q+SZ4D395n3R87UtLtTSZZ9ZDXT4t+TCR77YGiDfalLCvXqGeCp5X7SjFyNm5KeJCJl5lksvflgTIs77NCmrdBPg6eEhuTQ
+#@L:1ay/Q88ET2UT9FpMHfprD3g7AzyRPzFgcY8KNbOOp/TCZL8ftza4u0PJzFZ9uB/gCsZulR3fj6d61IirsZ5ePgKWIpvduKpBTLx8AMyMd7TFRvz8AFiOtK9R
+#@L:i6lb/TwezIphZwOYj65kDbtuwM47bU3Gan4sGGz26kY/G8ySodxRM9ydmpr6mh2Anbf6ISs5G8t7TL27QUn7DckE/lptwhlnMHhM/H2YfOV2BuhWmTo2uyHY
+#@L:sOPLG5NpmSfE2n8d0fuHC8hWc/1ywc5UZHIucsD+KecpIjYfbY1B4fT9Amq5KM5vsf/8ON4Q/em+Xh4RixgcCKmoQhiDmahxPLoKjcZj6gVzFtN7i2pJdYx3
+#@L:bnowHwTrWUWVSgOv9k3EZmM1z8tNeSVvl5sSLKvP8ChIn1vflptJb9MW9+e0J1teTo2ylUfS1JwFv9WbMrJK1EucXT2QTI8WoxQdsOufrybAIOf7a07NovDz
+#@L:V4Ng+Cz/hZ/FwlyzV8ZyyEQW8dpQbo85BmwVDnpqSNuGbSI8Dfw30ofHiCw25XYS1wuMHTCKgGwTDhN/1o5AZoBxjZDhHpCQpQxfZ4oaiFK43ekT5d/yo4he
+#@L:eZqH+Ik6ytUFLARhNbkz76tKNqzCGyOaLcZy17ter6IrBO56+vTxEWCINhUs6dL3Stu586vdRmPqJOittVJ1FsqGg6zq0Y7ZMRZndLqQjHrdKh2iMY8YgRsI
+#@L:KtVzhiZh3xP2iX7ECo7hqP/CE0xPy5Oj6tieLkKfhfDKgzajQhKpDbT3HAPiBXym4rW9xAUOFyE+5CsLh7ut5oMxES7F7936mqdryPxHt+YJLjSwsiVewvKi
+#@L:9L6CBhiu/40P6GKolBQuUx7lajjBwy8g7OAJ7b7eAPKGoZshBR2k8QLA1YJNkc/hWpnwbFNTnMaAI8CVupF6aHpAkT6/pEUDgd/W6hCsFIJ30B7BFbhROx9s
+#@L:qlVJ6GPVMv4NL8UO+wYHEdz+X2L9x/HlZVxZbMF2/YXZ2fPBRbObBW/EwFtwbECmbNV3eOPc8oLa1NOOdcHBqroBaDZY+opXL+o5q+7Hq3oAwW1ZuAJBYL8C
+#@L:U1JqdOQkAcOeTC6xRu0qjue1E4xfi9TlJaDFrLY4J5FzIY8Bm7/qDOCclQbXexAwePJyN/OiASt8QSpjTqv7/q36yUCA2g+7XGGTtk0lqHNcTeJVrrbNiOGg
+#@L:HEq/tljyMvP/+vmwbPW35/6SQ+fJn59x6vfhFRPQjynsu86Uf00fXGXs8fn5MQjgMw+lfTru+TUP4AGi1e1YYveMlXcVhR0G1L3LLXFdxU9yc1iYvhM9b683
+#@L:FFeJ+NLGpXFCoY0pIx5pP4C7P8w6vsEwjP6xNRwXUMwax7+xlQ1uoxfzLXZegXjQFwcVFAR/1rL0AsCG/XkwtmzBzgCWPsvZOcBYbs8DHhM1Ptnif8BtPU3/
+#@L:5zzyEufpWbiwn7o8j8EQyCzOoKhBmM5RQv/jZQWrja3rtsMJC4QsEBmrL3/c18lLJMRahecAS7HWiv15MC1CzmDxCtI+tu47PCeMTkhaMX++P4mM6fMMXX77
+#@L:x2j+aLneGXkGrNwc5nT3lM05Zk7xKVCDJk8J7MmTH58anFW/z1P0bDwV9rcISES5iYvRnYwC/5XP49g4SudjQ6bg0RPIOLNDuYmtM04Kjg/tGtVmZuhaY3pe
+#@L:7vqU+8j5tSlE+Zawji/tQkEalenK0ER8//5Y7RuND4nwYx1MRwFDcRmER9/27K0NPytdQuf4axI76yZYmtyu8I6UoJI3SPUkQ0n1vMOdphWJaz5XAx0qoRWl
+#@L:Tm/xx2XyRKDOTDfsYBQIYpZVeVB7ppuRUcHGMTbDpWCd2KRqsHXRLiBxzuD9yH3gINjq8HeBV7mQCN4hmEWXGCOkpasj1BRBiwFhCzQcyMME7zABa9AcRgBV
+#@L:pR0UGYfJpvAqWRPAjKfJAJgsKnN18tsKjJIJ5FUhOLZ5ZYBXNwEh4YpA+pYoW6fUSjh5Gu7T46ygu/XuvUxzuLN2BcezQfCWwJ5Nvq/BoSjB2mqngAlJyjXo
+#@L:0rCUrkqdwZ4Z3k8LlHyWNOnBMQBmeTwEfsFDCBaxCoxXygjMSaq7z8ExyxhlrDyWdJ8w2H1f/lSKV0vqOK/jJskGNNbICrChvFBTYPheCUbNFcHgLYXCP1Mo
+#@L:Sy4lnhsPBekb2t4j6ZQBgoMSjJEF5vCjvmas5GjYoKstWEHVVRYrNBnPgzoi+RXV9gX+OlkIF4SnRvHQ3iItGzDFUuEb6usKiCvcC0qHwJxb8BLapyEww+0P
+#@L:nkMjJdU4FApeXVFDXdHGB1UtODCjnt4Bw6UpZsE5HI3WeIOtGkI9tBJsSCuLsQHBag5ScDJQqTP7G0ELSXsqtn+v4P2/+BdKjlQdcFj+mACCv8AX/ClX4wXi
+#@L:BlP5XFMdo2MZVgLHmQS33R5pWyV54WlsO3THYmP9Qe0/WVHFRONgVUqwJdgvwbB81pcCflsDzrqh2YyRICuaNJ4GzKmXRdaPBP5CLXsAXNbxQtIWWgmG6yGp
+#@L:QJbjs2/13wTfhrrGAUep8pdDaldzey8oDKTkJHQ1JU4OgFkFxpx0ngMYRvU3z4Jx0wOmDEwSo8UsrGoVbH7V95qqogumLT2DKaaKwIHJ+sFyA40ruUWwgBqE
+#@L:4RfBkfUlgEmXVziO8Kq1UuY3tAcQljlUUBeMlcGVZ++uXfEQe/nAdL/VVv3Dmx9fyNXYU0iHB/C7R5MAdGxOnUjosm3R2ah2oY5V06ph2GXVPUgIxomnDxzH
+#@L:u4sfcQx9d2kduDN27EWfpVUrog3jvLy7FZOgcfgADdqnea8ZqynmeKHjd9QjwGLwWTQY+ixgOKYE9nvI/gYJ0scT/EwJtcXdaXCsoltlkid7oJeaKohgfhnt
+#@L:PN3nFAhgs8iDRtG892fFXEH9x+49u2ZbYRqbmP45H965KSzoT6RBcOCeZ5NUeQpjAZ+gXwOpzxP0WV7kzJ8XWiZ7V/V/xVHA2KEQLEQAAAAASUVORK5CYII=
 
 
-def start_keyboard_control():
-    """
-    Call this from main.py.
-    Starts AP, then runs the WebSocket server forever.
-    """
-    global _running
-    _running = True
-    start_ap()
-    asyncio.run(_run_server())
+
