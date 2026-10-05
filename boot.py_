@@ -1,17 +1,50 @@
 import network
 import webrepl
 import time
+import os
 
 ap = network.WLAN(network.AP_IF)
 ap.active(True)
 
-ap.config(
-    essid="ERC_Classroom",
-    password="12345678",
-    authmode=network.AUTH_WPA_WPA2_PSK
-)
+# Only set the hotspot when it is not set yet. Setting it again (on every
+# Thonny STOP / soft reboot) restarts the WiFi and drops the laptop + phone.
+if ap.config("essid") != "ERC_Classroom":
+    ap.config(
+        essid="ERC_Classroom",
+        password="12345678",
+        authmode=network.AUTH_WPA_WPA2_PSK
+    )
 
 print("Access Point Started")
 print("IP Address:", ap.ifconfig()[0])
 
-webrepl.start()
+
+# WebREPL allows only ONE Thonny connection. If the laptop leaves the WiFi
+# without closing Thonny, the old session stays "busy" and new connections
+# are refused until a reset. Here the NEWEST connection always wins:
+# a stale old session is closed so Thonny can connect again.
+# If anything here fails, WebREPL is started the normal way instead.
+try:
+    _webrepl_accept = webrepl.accept_conn
+
+    def _accept_newest(listen_sock):
+        old = os.dupterm(None)          # detach the old session (if any)
+        if old:
+            try:
+                webrepl.client_s.close()
+            except Exception:
+                pass
+            print("Old WebREPL session closed - new connection takes over")
+        return _webrepl_accept(listen_sock)
+
+    webrepl.accept_conn = _accept_newest
+    try:
+        webrepl.start(accept_handler=_accept_newest)
+    except TypeError:                   # older MicroPython versions
+        webrepl.start()
+except Exception as e:
+    print("WebREPL takeover not available:", e)
+    webrepl.start()
+
+
+
